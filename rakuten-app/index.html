@@ -185,18 +185,7 @@ function render() {
   document.getElementById('pdfTotal').value = CURRENT.pdfTotal || '';
   document.getElementById('debitDate').value = CURRENT.debitDate ? CURRENT.debitDate.replace(/\//g, '-') : '';
   document.getElementById('miStatus').textContent = CURRENT.status;
-  var ok = 0, check = 0, out = 0, done = 0;
-  LINES.forEach(function (L) {
-    if (L.status === 'そのままOK') ok++;
-    else if (L.status === '要確認') check++;
-    else if (L.status === '対象外') out++;
-    else if (L.status === '確定済') done++;
-  });
-  document.getElementById('chips').innerHTML =
-    '<span class="chip ok">そのままOK ' + ok + '件</span>' +
-    '<span class="chip check">要確認 ' + check + '件</span>' +
-    '<span class="chip out">今月は対象外 ' + out + '件</span>' +
-    (done ? '<span class="chip">確定済 ' + done + '件</span>' : '');
+  renderChips();
 }
 
 function renderChips() {
