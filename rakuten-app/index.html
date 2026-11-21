@@ -12,6 +12,7 @@
   button { font-size: 14px; padding: 6px 14px; border: 1px solid #888; background: #fff; border-radius: 6px; cursor: pointer; }
   button.primary { background: #1a73e8; color: #fff; border-color: #1a73e8; }
   button:disabled { opacity: 0.5; cursor: default; }
+  button.saved { background: #e6f4ea; border-color: #81c995; color: #137333; opacity: 1; }
   .msg { margin: 8px 0; min-height: 20px; }
   .msg.err { color: #b3261e; white-space: pre-wrap; }
   .msg.ok { color: #137333; }
@@ -181,6 +182,21 @@ function render() {
     '<span class="chip check">要確認 ' + check + '件</span>' +
     '<span class="chip out">今月は対象外 ' + out + '件</span>' +
     (done ? '<span class="chip">確定済 ' + done + '件</span>' : '');
+}
+
+function renderChips() {
+  var ok = 0, check = 0, out = 0, done = 0;
+  LINES.forEach(function (L) {
+    if (L.status === 'そのままOK') ok++;
+    else if (L.status === '要確認') check++;
+    else if (L.status === '対象外') out++;
+    else if (L.status === '確定済') done++;
+  });
+  document.getElementById('chips').innerHTML =
+    '<span class="chip ok">そのままOK ' + ok + '件</span>' +
+    '<span class="chip check">要確認 ' + check + '件</span>' +
+    '<span class="chip out">今月は対象外 ' + out + '件</span>' +
+    (done ? '<span class="chip">確定済 ' + done + '件</span>' : '');
   document.getElementById('csvLink').innerHTML = CURRENT.csvFileId
     ? '<a href="https://drive.google.com/file/d/' + CURRENT.csvFileId + '/view" target="_blank">作成したCSVを開く</a>' : '';
   var tb = document.getElementById('linesBody');
@@ -200,18 +216,33 @@ function optionsHtml(list, current) {
   return h;
 }
 
+function statusHtml(L, idx) {
+  var hasDiff = Number(L.billAmt) !== Number(L.useAmt);
+  var h = esc(L.status);
+  if (L.reason) {
+    h += '<div class="reason">' + esc(L.reason) + '</div>';
+    if (hasDiff && L.status !== '対象外') {
+      h += '<label style="font-size:12px;"><input type="checkbox" id="diff_' + idx + '"> 差額を確認した</label>';
+    }
+  }
+  return h;
+}
+
+function markDirty(idx) {
+  var b = document.getElementById('sv_' + idx);
+  if (b && b.dataset.state === 'saved') {
+    b.textContent = '修正保存';
+    b.disabled = false;
+    b.dataset.state = 'dirty';
+    b.classList.remove('saved');
+  }
+}
+
 function rowEl(L, idx) {
   var tr = document.createElement('tr');
   if (L.status === '要確認') tr.className = 'check';
   if (L.status === '対象外') tr.className = 'out';
-  var hasDiff = Number(L.billAmt) !== Number(L.useAmt);
-  var reasonHtml = '';
-  if (L.reason) {
-    reasonHtml = '<div class="reason">' + esc(L.reason) + '</div>';
-    if (hasDiff && L.status !== '対象外') {
-      reasonHtml += '<label style="font-size:12px;"><input type="checkbox" id="diff_' + idx + '"> 差額を確認した</label>';
-    }
-  }
+  var reasonHtml = statusHtml(L, idx);
   tr.innerHTML =
     '<td style="white-space:nowrap;">' + esc(L.date) + '</td>' +
     '<td>' + esc(L.merchant) + '<div class="src">' + esc(L.source) + '</div></td>' +
@@ -223,9 +254,11 @@ function rowEl(L, idx) {
     '<td><select id="km_' + idx + '">' + optionsHtml(MASTERS.kamokuList, L.kamoku) + '</select></td>' +
     '<td><input type="text" id="hj_' + idx + '" value="' + esc(L.hojo) + '" style="width:80px;"></td>' +
     '<td><select id="bm_' + idx + '">' + optionsHtml(MASTERS.bumonList, L.bumon) + '</select></td>' +
-    '<td>' + esc(L.status) + reasonHtml + '</td>' +
-    '<td><button data-save="' + idx + '">保存</button></td>';
+    '<td id="st_' + idx + '">' + reasonHtml + '</td>' +
+    '<td><button data-save="' + idx + '" id="sv_' + idx + '" data-state="unsaved">保存</button></td>';
   tr.querySelector('[data-save]').addEventListener('click', function () { saveLine(idx); });
+  tr.addEventListener('input', function () { markDirty(idx); });
+  tr.addEventListener('change', function () { markDirty(idx); });
   return tr;
 }
 
@@ -243,9 +276,23 @@ function saveLine(idx) {
     diffChecked: diffEl ? diffEl.checked : false
   };
   busy(true);
-  callApi('saveLine', p).then(function () {
+  callApi('saveLine', p).then(function (res) {
     busy(false);
-    loadLines();
+    L.status = res.status; L.reason = res.reason;
+    L.tekiyo = p.tekiyo; L.regNo = p.regNo; L.tax = p.tax;
+    L.kamoku = p.kamoku; L.hojo = p.hojo; L.bumon = p.bumon;
+    var cell = document.getElementById('st_' + idx);
+    var tr = cell ? cell.closest('tr') : null;
+    if (tr) tr.className = (L.status === '要確認') ? 'check' : (L.status === '対象外' ? 'out' : '');
+    if (cell) cell.innerHTML = statusHtml(L, idx);
+    renderChips();
+    var b = document.getElementById('sv_' + idx);
+    if (b) {
+      b.textContent = '保存済み';
+      b.disabled = true;
+      b.dataset.state = 'saved';
+      b.classList.add('saved');
+    }
   }).catch(function (e) { busy(false); setMsg(e.message, 'err'); });
 }
 
