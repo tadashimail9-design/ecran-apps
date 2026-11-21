@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>カメラテスト</title>
+<style>
+  body { font-family: sans-serif; margin: 16px; text-align: center; background:#f7f7f7; }
+  video, img { width: 100%; max-width: 480px; border-radius: 12px; background:#000; }
+  button { font-size: 22px; padding: 14px 28px; margin: 10px 6px; border-radius: 10px; border: 0; background:#2f6fb2; color:#fff; }
+  #shutter { background:#d9534f; }
+  #log { text-align:left; white-space: pre-wrap; font-size: 14px; background:#fff; padding:10px; border-radius:8px; margin-top:12px; }
+</style>
+</head>
+<body>
+<h2>カメラテスト</h2>
+<video id="v" autoplay playsinline muted></video>
+<div>
+  <button id="start">カメラを起動</button>
+  <button id="shutter" disabled>シャッター</button>
+</div>
+<img id="shot" alt="">
+<div id="log">準備OK</div>
+<script>
+var v = document.getElementById('v'), logEl = document.getElementById('log'), stream = null;
+function log(m){ logEl.textContent += '\n' + m; }
+log('表示モード: ' + (navigator.standalone ? 'ホーム画面アプリ' : 'ブラウザ'));
+document.getElementById('start').onclick = function(){
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { log('NG: この環境ではカメラAPIが使えません'); return; }
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
+    .then(function(s){ stream = s; v.srcObject = s; document.getElementById('shutter').disabled = false; log('OK: カメラ映像が映れば成功です'); })
+    .catch(function(e){ log('NG: ' + e.name + ' ' + e.message); });
+};
+document.getElementById('shutter').onclick = function(){
+  var c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext('2d').drawImage(v, 0, 0);
+  document.getElementById('shot').src = c.toDataURL('image/jpeg', 0.8);
+  log('撮影できました: ' + c.width + 'x' + c.height + '（このまま打刻に使えます）');
+};
+</script>
+</body>
+</html>
