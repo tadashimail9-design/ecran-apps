@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>楽天カード仕訳</title>
+<style>
+  body { font-family: sans-serif; margin: 16px; color: #222; font-size: 14px; }
+  h1 { font-size: 20px; margin: 0 0 12px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+  select, input[type="text"], input[type="number"], input[type="date"] { font-size: 14px; padding: 4px 6px; }
+  button { font-size: 14px; padding: 6px 14px; border: 1px solid #888; background: #fff; border-radius: 6px; cursor: pointer; }
+  button.primary { background: #1a73e8; color: #fff; border-color: #1a73e8; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .msg { margin: 8px 0; min-height: 20px; }
+  .msg.err { color: #b3261e; white-space: pre-wrap; }
+  .msg.ok { color: #137333; }
+  .chips { display: flex; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
+  .chip { border-radius: 12px; padding: 2px 10px; font-size: 13px; border: 1px solid #ccc; }
+  .chip.ok { background: #e6f4ea; border-color: #81c995; }
+  .chip.check { background: #fce8e6; border-color: #f28b82; }
+  .chip.out { background: #f1f3f4; color: #5f6368; }
+  .tablewrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid #dadce0; padding: 4px 6px; vertical-align: top; }
+  th { background: #f8f9fa; font-weight: 600; white-space: nowrap; }
+  tr.check td { background: #fef7f6; }
+  tr.out td { color: #80868b; background: #fafafa; }
+  td.num { text-align: right; white-space: nowrap; }
+  td .reason { color: #b3261e; font-size: 12px; margin-top: 2px; }
+  td input[type="text"] { width: 110px; }
+  td input.reg { width: 130px; }
+  td select { max-width: 130px; }
+  .src { color: #5f6368; font-size: 11px; }
+  .monthinfo { border: 1px solid #dadce0; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+  .monthinfo label { margin-right: 4px; }
+  .monthinfo .item { margin-right: 16px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<h1>楽天カード仕訳</h1>
+
+<div class="bar">
+  <label>請求月
+    <select id="monthSel"></select>
+  </label>
+  <button id="reloadBtn">再読み込み</button>
+  <span style="margin-left:12px;">明細を取り込む:
+    <input type="file" id="fileInput" accept=".xlsx,.csv">
+  </span>
+</div>
+
+<div class="msg" id="msg"></div>
+
+<div class="monthinfo" id="monthInfo" style="display:none;">
+  <span class="item">明細 <b id="miCount"></b> 件</span>
+  <span class="item">利用合計 <b id="miUse"></b> 円</span>
+  <span class="item">請求額合計 <b id="miBill"></b> 円</span>
+  <span class="item"><label for="pdfTotal">PDFの請求額</label>
+    <input type="number" id="pdfTotal" style="width:110px;"> 円</span>
+  <span class="item"><label for="debitDate">引落日</label>
+    <input type="date" id="debitDate"></span>
+  <button id="saveMonthBtn">請求額と引落日を保存</button>
+  <span class="item">状態: <b id="miStatus"></b></span>
+</div>
+
+<div class="chips" id="chips"></div>
+
+<div class="bar">
+  <button class="primary" id="finalizeBtn">弥生CSVを作成する</button>
+  <span id="csvLink"></span>
+</div>
+
+<div class="tablewrap">
+<table id="linesTable" style="display:none;">
+  <thead>
+    <tr>
+      <th>日付</th><th>利用先</th><th>利用金額</th><th>請求額</th>
+      <th>摘要</th><th>登録番号</th><th>税区分</th><th>科目</th><th>補助</th><th>部門</th><th>状態</th><th></th>
+    </tr>
+  </thead>
+  <tbody id="linesBody"></tbody>
+</table>
+</div>
+
+<script>
+var EXEC_URL = 'https://script.google.com/macros/s/AKfycbzHfQ7iSbmVaUKKEkLViIHfg42QRV_yMMAyMtFJRxbSP-fNh8l_ulsgUDVdfe67EiK1/exec';
+var MASTERS = { kamokuList: [], bumonList: [], taxList: [] };
+var CURRENT = null;
+var LINES = [];
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function yen(n) { return Number(n).toLocaleString('ja-JP'); }
+function setMsg(text, kind) {
+  var el = document.getElementById('msg');
+  el.textContent = text || '';
+  el.className = 'msg' + (kind ? ' ' + kind : '');
+}
+function busy(b) {
+  document.getElementById('finalizeBtn').disabled = b;
+  document.getElementById('reloadBtn').disabled = b;
+}
+
+// GASのdoPostへJSONで送る (勤怠アプリと同じ実績のある方式)
+function callApi(action, params) {
+  var body = Object.assign({ action: action }, params || {});
+  var ctl = new AbortController();
+  var timer = setTimeout(function () { ctl.abort(); }, 120000);
+  return fetch(EXEC_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify(body),
+    signal: ctl.signal
+  }).then(function (r) { return r.text(); }).then(function (t) {
+    clearTimeout(timer);
+    var d = JSON.parse(t);
+    if (!d.ok) throw new Error(d.error || 'エラーが発生しました');
+    return d.result;
+  }).catch(function (e) {
+    clearTimeout(timer);
+    if (e.name === 'AbortError') throw new Error('応答がありません。通信状態を確認して、もう一度お試しください。');
+    throw e;
+  });
+}
+
+function loadAll(selectId) {
+  setMsg('読み込み中...');
+  callApi('boot', { monthId: selectId || '' }).then(function (res) {
+    MASTERS = res;
+    var sel = document.getElementById('monthSel');
+    sel.innerHTML = '';
+    res.months.forEach(function (m) {
+      var o = document.createElement('option');
+      o.value = m.monthId;
+      o.textContent = m.label + '（' + m.status + '）';
+      sel.appendChild(o);
+    });
+    if (res.month) {
+      sel.value = res.month.monthId;
+      CURRENT = res.month;
+      LINES = res.lines;
+      render();
+    }
+    setMsg('');
+  }).catch(function (e) { setMsg(e.message, 'err'); });
+}
+
+function loadLines() {
+  var monthId = document.getElementById('monthSel').value;
+  if (!monthId) return;
+  setMsg('読み込み中...');
+  callApi('lines', { monthId: monthId }).then(function (res) {
+    CURRENT = res.month;
+    LINES = res.lines;
+    render();
+    setMsg('');
+  }).catch(function (e) { setMsg(e.message, 'err'); });
+}
+
+function render() {
+  var mi = document.getElementById('monthInfo');
+  mi.style.display = 'block';
+  document.getElementById('miCount').textContent = CURRENT.count;
+  document.getElementById('miUse').textContent = yen(CURRENT.useTotal);
+  document.getElementById('miBill').textContent = yen(CURRENT.billTotal);
+  document.getElementById('pdfTotal').value = CURRENT.pdfTotal || '';
+  document.getElementById('debitDate').value = CURRENT.debitDate ? CURRENT.debitDate.replace(/\//g, '-') : '';
+  document.getElementById('miStatus').textContent = CURRENT.status;
+  var ok = 0, check = 0, out = 0, done = 0;
+  LINES.forEach(function (L) {
+    if (L.status === 'そのままOK') ok++;
+    else if (L.status === '要確認') check++;
+    else if (L.status === '対象外') out++;
+    else if (L.status === '確定済') done++;
+  });
+  document.getElementById('chips').innerHTML =
+    '<span class="chip ok">そのままOK ' + ok + '件</span>' +
+    '<span class="chip check">要確認 ' + check + '件</span>' +
+    '<span class="chip out">今月は対象外 ' + out + '件</span>' +
+    (done ? '<span class="chip">確定済 ' + done + '件</span>' : '');
+  document.getElementById('csvLink').innerHTML = CURRENT.csvFileId
+    ? '<a href="https://drive.google.com/file/d/' + CURRENT.csvFileId + '/view" target="_blank">作成したCSVを開く</a>' : '';
+  var tb = document.getElementById('linesBody');
+  tb.innerHTML = '';
+  LINES.forEach(function (L, idx) { tb.appendChild(rowEl(L, idx)); });
+  document.getElementById('linesTable').style.display = 'table';
+}
+
+function optionsHtml(list, current) {
+  var h = '<option value=""></option>';
+  list.forEach(function (v) {
+    h += '<option value="' + esc(v) + '"' + (v === current ? ' selected' : '') + '>' + esc(v) + '</option>';
+  });
+  if (current && list.indexOf(current) < 0) {
+    h += '<option value="' + esc(current) + '" selected>' + esc(current) + '</option>';
+  }
+  return h;
+}
+
+function rowEl(L, idx) {
+  var tr = document.createElement('tr');
+  if (L.status === '要確認') tr.className = 'check';
+  if (L.status === '対象外') tr.className = 'out';
+  var hasDiff = Number(L.billAmt) !== Number(L.useAmt);
+  var reasonHtml = '';
+  if (L.reason) {
+    reasonHtml = '<div class="reason">' + esc(L.reason) + '</div>';
+    if (hasDiff && L.status !== '対象外') {
+      reasonHtml += '<label style="font-size:12px;"><input type="checkbox" id="diff_' + idx + '"> 差額を確認した</label>';
+    }
+  }
+  tr.innerHTML =
+    '<td style="white-space:nowrap;">' + esc(L.date) + '</td>' +
+    '<td>' + esc(L.merchant) + '<div class="src">' + esc(L.source) + '</div></td>' +
+    '<td class="num">' + yen(L.useAmt) + '</td>' +
+    '<td class="num">' + yen(L.billAmt) + '</td>' +
+    '<td><input type="text" id="te_' + idx + '" value="' + esc(L.tekiyo) + '"></td>' +
+    '<td><input type="text" class="reg" id="rg_' + idx + '" value="' + esc(L.regNo) + '" placeholder="T+13桁"></td>' +
+    '<td><select id="tx_' + idx + '">' + optionsHtml(MASTERS.taxList, L.tax) + '</select></td>' +
+    '<td><select id="km_' + idx + '">' + optionsHtml(MASTERS.kamokuList, L.kamoku) + '</select></td>' +
+    '<td><input type="text" id="hj_' + idx + '" value="' + esc(L.hojo) + '" style="width:80px;"></td>' +
+    '<td><select id="bm_' + idx + '">' + optionsHtml(MASTERS.bumonList, L.bumon) + '</select></td>' +
+    '<td>' + esc(L.status) + reasonHtml + '</td>' +
+    '<td><button data-save="' + idx + '">保存</button></td>';
+  tr.querySelector('[data-save]').addEventListener('click', function () { saveLine(idx); });
+  return tr;
+}
+
+function saveLine(idx) {
+  var L = LINES[idx];
+  var diffEl = document.getElementById('diff_' + idx);
+  var p = {
+    monthId: CURRENT.monthId, rowIndex: L.rowIndex,
+    tekiyo: document.getElementById('te_' + idx).value,
+    regNo: document.getElementById('rg_' + idx).value.trim(),
+    tax: document.getElementById('tx_' + idx).value,
+    kamoku: document.getElementById('km_' + idx).value,
+    hojo: document.getElementById('hj_' + idx).value,
+    bumon: document.getElementById('bm_' + idx).value,
+    diffChecked: diffEl ? diffEl.checked : false
+  };
+  busy(true);
+  callApi('saveLine', p).then(function () {
+    busy(false);
+    loadLines();
+  }).catch(function (e) { busy(false); setMsg(e.message, 'err'); });
+}
+
+document.getElementById('monthSel').addEventListener('change', loadLines);
+document.getElementById('reloadBtn').addEventListener('click', function () { loadAll(CURRENT && CURRENT.monthId); });
+document.getElementById('saveMonthBtn').addEventListener('click', function () {
+  var p = {
+    monthId: CURRENT.monthId,
+    pdfTotal: document.getElementById('pdfTotal').value,
+    debitDate: document.getElementById('debitDate').value.replace(/-/g, '/')
+  };
+  busy(true);
+  callApi('monthInfo', p).then(function () {
+    busy(false); setMsg('保存しました。', 'ok'); loadLines();
+  }).catch(function (e) { busy(false); setMsg(e.message, 'err'); });
+});
+document.getElementById('finalizeBtn').addEventListener('click', function () {
+  if (!CURRENT) return;
+  if (!confirm('弥生インポート用のCSVを作成します。よろしいですか？')) return;
+  busy(true); setMsg('CSVを作成中...');
+  callApi('finalize', { monthId: CURRENT.monthId }).then(function (res) {
+    busy(false);
+    setMsg('CSVを作成しました（' + res.rows + '行・請求額合計 ' + yen(res.billTotal) + '円）。', 'ok');
+    loadAll(CURRENT.monthId);
+  }).catch(function (e) { busy(false); setMsg(e.message, 'err'); });
+});
+document.getElementById('fileInput').addEventListener('change', function (ev) {
+  var f = ev.target.files[0];
+  if (!f) return;
+  var reader = new FileReader();
+  reader.onload = function () {
+    var b64 = String(reader.result).split(',')[1];
+    busy(true); setMsg('取り込み中...');
+    callApi('intake', { fileName: f.name, base64: b64 }).then(function (res) {
+      busy(false);
+      setMsg('取り込みました: ' + res.count + '件（そのままOK ' + res.ok + '件 / 要確認 ' + res.check + '件 / 対象外 ' + res.out + '件）', 'ok');
+      loadAll(res.monthId);
+    }).catch(function (e) { busy(false); setMsg(e.message, 'err'); });
+  };
+  reader.readAsDataURL(f);
+  ev.target.value = '';
+});
+
+loadAll();
+</script>
+</body>
+</html>
