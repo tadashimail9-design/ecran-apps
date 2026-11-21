@@ -54,7 +54,7 @@
 <div class="bar">
   <span>スマホでレシート撮影する:
     <label for="receiptInput" style="display:inline-block; padding:9px 16px; background:#1a73e8; color:#fff; border-radius:6px; cursor:pointer; font-size:15px;">📷 カメラを起動</label>
-    <input type="file" id="receiptInput" accept="image/*" style="display:none;">
+    <input type="file" id="receiptInput" accept="image/*" multiple style="display:none;">
   </span>
   <span id="receiptMsg" style="font-size:13px;"></span>
 </div>
@@ -356,29 +356,59 @@ document.getElementById('fileInput').addEventListener('change', function (ev) {
   ev.target.value = '';
 });
 
+var receiptQueue = [];
+var receiptBusy = false;
+var receiptCount = 0;
+
+function enqueueReceipt(file) {
+  receiptCount++;
+  var item = document.createElement('div');
+  item.textContent = 'レシート' + receiptCount + ': 送信待ち...';
+  var box = document.getElementById('receiptMsg');
+  box.insertBefore(item, box.firstChild);
+  receiptQueue.push({ file: file, item: item, n: receiptCount });
+  pumpReceiptQueue();
+}
+
+function pumpReceiptQueue() {
+  if (receiptBusy) return;
+  var job = receiptQueue.shift();
+  if (!job) return;
+  receiptBusy = true;
+  job.item.textContent = 'レシート' + job.n + ': 読み取り中...';
+  processReceiptFile(job.file).then(function (r) {
+    job.item.textContent = 'レシート' + job.n + ': ✓ ' + r.storeName + ' / ' + r.date + ' / ' + Number(r.total).toLocaleString() + '円' +
+      (r.regNo ? ' / 登録番号 ' + r.regNo : ' / 登録番号なし');
+  }).catch(function (e) {
+    job.item.textContent = 'レシート' + job.n + ': ✗ 読み取りできませんでした（' + e.message + '）';
+  }).then(function () {
+    receiptBusy = false;
+    pumpReceiptQueue();
+  });
+}
+
+function processReceiptFile(f) {
+  return new Promise(function (resolve, reject) {
+    var url = URL.createObjectURL(f);
+    var img = new Image();
+    img.onload = function () {
+      var scale = Math.min(1, 1200 / Math.max(img.width, img.height));
+      var cv = document.createElement('canvas');
+      cv.width = Math.round(img.width * scale);
+      cv.height = Math.round(img.height * scale);
+      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+      URL.revokeObjectURL(url);
+      var b64 = cv.toDataURL('image/jpeg', 0.8).split(',')[1];
+      callApi('receipt', { base64: b64, mime: 'image/jpeg' }, 120000).then(function (res) { resolve(res.receipt); }).catch(reject);
+    };
+    img.onerror = function () { reject(new Error('画像を開けませんでした')); };
+    img.src = url;
+  });
+}
+
 document.getElementById('receiptInput').addEventListener('change', function (ev) {
-  var f = ev.target.files[0];
-  if (!f) return;
-  var rm = document.getElementById('receiptMsg');
-  var url = URL.createObjectURL(f);
-  var img = new Image();
-  img.onload = function () {
-    var scale = Math.min(1, 1200 / Math.max(img.width, img.height));
-    var cv = document.createElement('canvas');
-    cv.width = Math.round(img.width * scale);
-    cv.height = Math.round(img.height * scale);
-    cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
-    URL.revokeObjectURL(url);
-    var b64 = cv.toDataURL('image/jpeg', 0.8).split(',')[1];
-    rm.textContent = 'レシートを読み取り中...';
-    callApi('receipt', { base64: b64, mime: 'image/jpeg' }, 120000).then(function (res) {
-      var r = res.receipt;
-      rm.textContent = '読み取りました: ' + r.storeName + ' / ' + r.date + ' / ' + Number(r.total).toLocaleString() + '円' +
-        (r.regNo ? ' / 登録番号 ' + r.regNo : ' / 登録番号なし') + '（明細を取り込むときに自動で突き合わせます）';
-    }).catch(function (e) { rm.textContent = '読み取りできませんでした: ' + e.message; });
-  };
-  img.onerror = function () { rm.textContent = '画像を開けませんでした。'; };
-  img.src = url;
+  var files = ev.target.files;
+  for (var i = 0; i < files.length; i++) enqueueReceipt(files[i]);
   ev.target.value = '';
 });
 
