@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2f5d7d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="勤怠打刻">
+<link rel="apple-touch-icon" sizes="180x180" href="icon.png">
+<link rel="icon" type="image/png" href="icon.png">
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin:0; font-family: -apple-system, "Hiragino Sans", sans-serif; background:#fff; color:#222; height:100vh; overflow:hidden; }
+  .hidden { display:none !important; }
+  /* 登録画面 */
+  #viewRegister { max-width:560px; margin:0 auto; padding:48px 24px; }
+  #viewRegister h1 { font-size:26px; margin:0 0 8px; }
+  #viewRegister p { color:#666; margin:0 0 24px; }
+  .storeBtns { display:flex; gap:12px; margin-bottom:20px; }
+  .storeBtn { flex:1; padding:20px 8px; font-size:19px; border:2px solid #b9c8d4; border-radius:10px; background:#fff; cursor:pointer; }
+  .storeBtn.sel { border-color:#1976c9; background:#e3f0fa; font-weight:700; }
+  #viewRegister label { display:block; font-size:14px; margin:14px 0 6px; color:#666; }
+  #viewRegister input { width:100%; font-size:20px; padding:12px; border:1px solid #b9c8d4; border-radius:8px; }
+  #regBtn { width:100%; margin-top:26px; padding:18px; font-size:20px; font-weight:700; color:#fff; background:#1976c9; border:none; border-radius:10px; cursor:pointer; }
+  .err { color:#b3261e; margin-top:14px; font-size:15px; min-height:20px; }
+  /* 打刻画面 */
+  #viewMain { display:flex; flex-direction:column; height:100vh; }
+  #header { height:46px; display:flex; align-items:center; border-bottom:1px solid #ddd; padding:0 12px; flex:none; }
+  #header .ttl { flex:1; text-align:center; font-size:18px; font-weight:700; color:#33566e; letter-spacing:.12em; }
+  .hbtn { background:none; border:none; font-size:14px; color:#555; cursor:pointer; padding:8px 6px; min-width:52px; }
+  #body { flex:1; display:flex; flex-direction:column; min-height:0; }
+  #topbar { flex:none; padding:10px 12px 4px; }
+  #dateLine { text-align:center; font-size:19px; color:#444; }
+  #clock { text-align:center; font-size:72px; font-weight:800; line-height:1.05; font-variant-numeric:tabular-nums; }
+  #listArea { flex:1; padding:8px 12px; display:flex; flex-direction:column; min-height:0; }
+  .tabs { display:flex; gap:8px; margin-bottom:10px; }
+  .tab { padding:10px 20px; font-size:17px; border-radius:8px; border:1px solid #b9c8d4; background:#eef3f7; color:#33566e; cursor:pointer; }
+  .tab.sel { background:#33566e; color:#fff; font-weight:700; }
+  .staff .pt { font-size:13px; color:#ffd97a; line-height:1.25; white-space:nowrap; }
+  .gridNote { color:#888; font-size:16px; line-height:1.7; padding:10px 2px; }
+  #grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; overflow-y:auto; align-content:start; padding-bottom:12px; }
+  .staff { display:flex; align-items:center; gap:12px; background:#232323; border-radius:8px; padding:10px 12px; cursor:pointer; min-height:92px; border:3px solid #232323; }
+  .staff .ic { width:64px; height:64px; border-radius:8px; flex:none; display:flex; align-items:center; justify-content:center; font-size:30px; font-weight:800; color:#fff; }
+  .staff .tx { min-width:0; }
+  .staff .cd { font-size:12px; color:#aaa; line-height:1.2; }
+  .staff .nm { font-size:21px; font-weight:700; color:#fff; line-height:1.25; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .staff.sel { background:#3d3d3d; border-color:#ffffff; }
+  .staff .st { font-size:13px; color:#9fc3e0; line-height:1.25; white-space:nowrap; }
+  #bottombar { flex:none; padding:6px 12px 14px; border-top:1px solid #e3e8ec; }
+  #selName { text-align:center; font-size:27px; font-weight:800; color:#1976c9; min-height:38px; }
+  #photoChoice { margin:6px 0 10px; background:#fff8e1; border:1px solid #e0c060; border-radius:8px; padding:10px; font-size:15px; }
+  .photoChoiceBtns { display:flex; gap:8px; margin-top:8px; }
+  .photoChoiceBtns button { flex:1; padding:12px; font-size:16px; border-radius:8px; border:1px solid #bbb; background:#fff; }
+  #btnNoPhoto { background:#2f5d7d; color:#fff; border-color:#2f5d7d; }
+  .punchBtns { display:flex; gap:14px; }
+  .punch { flex:1; padding:26px 0; font-size:33px; font-weight:800; border:none; border-radius:12px; color:#fff; cursor:pointer; }
+  .punch:disabled { opacity:.3; }
+  #btnIn { background:#2196d3; } #btnOut { background:#e07b39; }
+  #ovPhoto { max-width:220px; max-height:170px; border-radius:10px; margin-bottom:14px; }
+  .staff.sel .cd { color:#dff3e2; }
+  /* 結果・通知 */
+  #overlay { position:fixed; inset:0; background:rgba(20,30,40,.9); color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:50; }
+  #ovMain { font-size:40px; font-weight:800; text-align:center; padding:0 20px; }
+  #ovTime { font-size:96px; font-weight:800; line-height:1.1; font-variant-numeric:tabular-nums; }
+  #ovSub { font-size:24px; margin-top:14px; color:#ffd9a0; text-align:center; }
+  #ovName { font-size:20px; color:#cfe0ec; margin-bottom:8px; }
+  #banner { position:fixed; left:50%; transform:translateX(-50%); bottom:18px; background:#b3261e; color:#fff; padding:14px 22px; border-radius:10px; font-size:17px; z-index:60; max-width:90%; text-align:center; }
+  .panel { position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; z-index:66; }
+  .panelBox { background:#fff; border-radius:14px; padding:22px; width:520px; max-width:94%; max-height:92vh; overflow-y:auto; }
+  .panelBox h2 { margin:0 0 8px; font-size:20px; }
+  .panelBox .desc { color:#555; font-size:14px; line-height:1.7; margin-bottom:12px; }
+  .timeRow { display:flex; gap:10px; align-items:center; margin:8px 0 4px; }
+  .timeRow select { font-size:22px; padding:10px; border:1px solid #b9c8d4; border-radius:8px; background:#fff; }
+  .panelBox textarea { width:100%; font-size:16px; padding:10px; border:1px solid #b9c8d4; border-radius:8px; box-sizing:border-box; }
+  .panelBox label { display:block; font-size:14px; margin:14px 0 6px; color:#666; }
+  .mainBtn { width:100%; padding:15px; font-size:18px; font-weight:700; color:#fff; background:#2196d3; border:none; border-radius:10px; margin-top:16px; cursor:pointer; }
+  .subBtn { width:100%; padding:12px; font-size:15px; border:none; border-radius:8px; background:#eee; margin-top:8px; cursor:pointer; }
+  .reasonOpt { display:block; padding:13px 14px; border:2px solid #e2e8ee; border-radius:10px; margin-top:8px; font-size:16px; cursor:pointer; }
+  .reasonOpt.sel { border-color:#2196d3; background:#e3f0fa; font-weight:700; }
+  #iconPicker { position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; z-index:65; }
+  #iconBox { background:#fff; border-radius:14px; padding:22px; width:520px; max-width:94%; }
+  #iconBox h2 { margin:0 0 4px; font-size:19px; }
+  #iconBox p { margin:0 0 14px; color:#777; font-size:13px; }
+  #iconGrid { display:grid; grid-template-columns:repeat(6,1fr); gap:8px; }
+  .iconBtn { font-size:30px; padding:10px 0; background:#f4f6f8; border:2px solid #e2e8ee; border-radius:10px; cursor:pointer; }
+  .iconBtn:active { border-color:#1976c9; background:#e3f0fa; }
+  #iconSkip { width:100%; margin-top:14px; padding:12px; font-size:15px; border:none; border-radius:8px; background:#eee; cursor:pointer; }
+  #camVideo { width:100%; max-height:46vh; background:#000; border-radius:10px; transform:scaleX(-1); }
+  #camShutter { font-size:23px; padding:20px; }
+  #settings { position:fixed; inset:0; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; z-index:70; }
+  #settingsBox { background:#fff; border-radius:12px; padding:24px; width:420px; max-width:92%; }
+  #settingsBox h2 { margin:0 0 14px; font-size:19px; }
+  #settingsBox input { width:100%; font-size:18px; padding:10px; border:1px solid #b9c8d4; border-radius:8px; margin-bottom:12px; }
+  #settingsBox button { width:100%; padding:13px; font-size:16px; border-radius:8px; border:none; margin-top:8px; cursor:pointer; }
+  #disableBtn { background:#b3261e; color:#fff; }
+  #closeSettings { background:#eee; }
+</style>
+</head>
+<body>
+<div id="viewRegister" class="hidden">
+  <h1>エクラン勤怠 打刻端末の登録</h1>
+  <p>このiPadを打刻端末として登録します。店舗を選び、管理者コードを入力してください。</p>
+  <div class="storeBtns">
+    <button class="storeBtn" data-store="kannabe">神辺店</button>
+    <button class="storeBtn" data-store="kinoshou">木之庄店</button>
+    <button class="storeBtn" data-store="test">事務所（テスト）</button>
+  </div>
+  <label>端末名（任意）</label>
+  <input id="regName" type="text" placeholder="例：木之庄店 iPad">
+  <label>管理者コード</label>
+  <input id="regCode" type="password" inputmode="numeric" autocomplete="off">
+  <button id="regBtn">この端末を登録する</button>
+  <div class="err" id="regErr"></div>
+</div>
+
+<div id="viewMain" class="hidden">
+  <div id="header">
+    <div style="min-width:52px"></div>
+    <div class="ttl">エクラン勤怠</div>
+    <button class="hbtn" id="gear">設定</button>
+  </div>
+  <div id="body">
+    <div id="topbar">
+      <div id="dateLine"></div>
+      <div id="clock">--:--:--</div>
+    </div>
+    <div id="listArea">
+      <div class="tabs">
+        <button class="tab sel" id="tabToday">本日の出勤</button>
+        <button class="tab" id="tabMine">すべて</button>
+        <button class="tab" id="tabOther">応援スタッフ</button>
+      </div>
+      <div id="grid"></div>
+    </div>
+    <div id="bottombar">
+      <div id="selName"></div>
+      <div class="punchBtns">
+        <button class="punch" id="btnIn" disabled>出勤</button>
+        <button class="punch" id="btnOut" disabled>退勤</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="overlay" class="hidden"><img id="ovPhoto" class="hidden" alt=""><div id="ovName"></div><div id="ovMain"></div><div id="ovTime"></div><div id="ovSub"></div></div>
+<div id="banner" class="hidden"></div>
+
+<div id="iconPicker" class="hidden">
+  <div id="iconBox">
+    <h2 id="iconTitle">アイコンを選んでください</h2>
+    <p>名前の横に出るマークです。あとから名前を長押しすると変えられます。</p>
+    <div id="iconGrid"></div>
+    <button id="iconSkip">あとで選ぶ</button>
+  </div>
+</div>
+
+<div id="declPanel" class="panel hidden">
+  <div class="panelBox">
+    <h2>出勤打刻がありません</h2>
+    <div class="desc" id="declDesc"></div>
+    <label>実際の出勤時刻（必須）</label>
+    <div class="timeRow"><select id="declH"></select> 時 <select id="declM"></select> 分</div>
+    <label>備考（任意）</label>
+    <textarea id="declNote" rows="2"></textarea>
+    <button class="mainBtn" id="declSend">申請して退勤する</button>
+    <button class="subBtn" id="declSkip">あとで申請する</button>
+    <div class="err" id="declErr"></div>
+    <div id="declDone" class="hidden">
+      <p style="font-size:17px; line-height:1.8">出勤時刻の修正申請が完了しました。<br>今月の打刻忘れ：<b id="declCount"></b>回目<br><span style="color:#888; font-size:14px">出退勤時には打刻を忘れないようにしましょう。</span></p>
+      <button class="mainBtn" id="declClose">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<div id="reasonPanel" class="panel hidden">
+  <div class="panelBox">
+    <h2 id="reasonTitle">理由を教えてください</h2>
+    <div class="desc" id="reasonDesc"></div>
+    <div id="reasonOpts"></div>
+    <textarea id="reasonFree" rows="2" class="hidden" placeholder="理由を入力してください" style="margin-top:10px"></textarea>
+    <button class="mainBtn" id="reasonSend">回答する</button>
+    <button class="subBtn" id="reasonSkip">あとで回答する</button>
+    <div class="err" id="reasonErr"></div>
+  </div>
+</div>
+
+<div id="camPanel" class="panel hidden">
+  <div class="panelBox" style="text-align:center">
+    <h2 id="camTitle"></h2>
+    <video id="camVideo" autoplay playsinline muted></video>
+    <button class="mainBtn" id="camShutter">📸 撮影して打刻する</button>
+    <button class="subBtn" id="camCancel">やめる</button>
+    <div class="err" id="camErr"></div>
+  </div>
+</div>
+
+<div id="settings" class="hidden">
+  <div id="settingsBox">
+    <h2>端末の設定</h2>
+    <input id="setCode" type="password" inputmode="numeric" placeholder="管理者コード" autocomplete="off">
+    <button id="disableBtn">この端末の登録を解除する</button>
+    <button id="closeSettings">閉じる</button>
+    <div class="err" id="setErr"></div>
+  </div>
+</div>
+
+<script>
+var TOKEN_KEY = 'ecran_att_token_v1';
+var _ls = null; try { _ls = window.localStorage; } catch (e) {}
+var store = { _m: {}, get: function(k){ try { return _ls ? _ls.getItem(k) : null; } catch(e){ return (k in this._m) ? this._m[k] : null; } }, set: function(k, v){ try { if (_ls) _ls.setItem(k, v); else this._m[k] = v; } catch(e){ this._m[k] = v; } }, remove: function(k){ try { if (_ls) _ls.removeItem(k); } catch(e){} delete this._m[k]; } };
+var state = { token: store.get(TOKEN_KEY) || '', staff: [], otherStaff: [], tab: 'today', plan: { found: false, byStaff: {} }, status: {}, selected: null, regStore: '' };
+var EXEC_URL = 'https://script.google.com/macros/s/AKfycbzv31BsMHwTv4A_Ev_7MT23AfHcJqLgBvQQC_OychVcsKDcbY29QafwaotsUWn-9tD25w/exec';
+function apiCall(body, onOk, onErr){
+  var ctl = ('AbortController' in window) ? new AbortController() : null;
+  var timer = ctl ? setTimeout(function(){ ctl.abort(); }, 30000) : null;
+  fetch(EXEC_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body), signal: ctl ? ctl.signal : undefined })
+    .then(function(r){ return r.json(); })
+    .then(function(res){ if (timer) clearTimeout(timer); if (onOk) onOk(res); })
+    .catch(function(e){ if (timer) clearTimeout(timer); if (onErr) onErr(e); });
+}
+var ICON_COLORS = ['#7a9e43','#c96a2c','#4a7ebb','#9e4a7a','#3f8f7d','#b03a3a','#5d6db0','#8a6d3b','#2c7a9e','#6a9e43'];
+
+function $(id){ return document.getElementById(id); }
+function showBanner(msg){ var b=$('banner'); b.textContent=msg; b.classList.remove('hidden'); setTimeout(function(){ b.classList.add('hidden'); }, 4200); }
+function iconColor(code){ var n=0; for (var i=0;i<code.length;i++) n += code.charCodeAt(i); return ICON_COLORS[n % ICON_COLORS.length]; }
+function iconChar(name){ return name ? name.charAt(0) : '?'; }
+var ICON_SET = ['🐶','🐱','🐰','🐻','🐼','🦊','🐨','🐯','🦁','🐷','🐸','🐵','🌸','🌻','🍓','🍎','🍊','🍋','🍇','☕','🍰','🍮','🍩','⭐'];
+var pickerStaff = null;
+function openIconPicker(staff){
+  pickerStaff = staff;
+  $('iconTitle').textContent = staff.name + 'さんのアイコン';
+  var g = $('iconGrid'); g.innerHTML = '';
+  ICON_SET.forEach(function(ic){
+    var b = document.createElement('button'); b.className = 'iconBtn'; b.textContent = ic;
+    b.onclick = function(){
+      apiCall({ action: 'setIcon', token: state.token, staffCode: staff.code, icon: ic }, function(res){
+        if (res && res.ok) { staff.icon = ic; $('iconPicker').classList.add('hidden'); renderGrid(); showBanner('アイコンを設定しました'); }
+        else showBanner('アイコンを保存できませんでした');
+      }, function(){ showBanner('アイコンを保存できませんでした'); });
+    };
+    g.appendChild(b);
+  });
+  $('iconPicker').classList.remove('hidden');
+}
+
+function startClock(){
+  function tick(){
+    var d = new Date();
+    var w = ['日','月','火','水','木','金','土'][d.getDay()];
+    $('dateLine').textContent = d.getFullYear() + '年' + (d.getMonth()+1) + '月' + d.getDate() + '日（' + w + '）';
+    $('clock').textContent = ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2) + ':' + ('0'+d.getSeconds()).slice(-2);
+  }
+  tick(); setInterval(tick, 500);
+}
+var pendingPunch = null, camStream = null;
+function doPunch(type){
+  if (!state.selected) return;
+  pendingPunch = { type: type, staff: state.selected };
+  $('camTitle').textContent = pendingPunch.staff.name + 'さんの' + type;
+  $('camErr').textContent = '';
+  $('camPanel').classList.remove('hidden');
+  startCamera();
+}
+function startCamera(){
+  if (camStream) { attachCam(); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { $('camErr').textContent = 'この端末ではカメラが使えません'; return; }
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
+    .then(function(s){ camStream = s; attachCam(); })
+    .catch(function(){ $('camErr').textContent = 'カメラを起動できませんでした。許可を確認してください'; });
+}
+function attachCam(){ var v = $('camVideo'); if (v.srcObject !== camStream) v.srcObject = camStream; }
+function bindCamFlow(){
+  $('camCancel').onclick = function(){
+    // カメラをやめたら打刻せず通常の画面に戻る。写真なしの打刻は認めない（社長指示 2026-11-21）
+    pendingPunch = null;
+    $('camPanel').classList.add('hidden');
+    showBanner('写真を撮らないと打刻できません');
+  };
+  $('camShutter').onclick = function(){
+    var v = $('camVideo');
+    if (!camStream || !v.videoWidth) { $('camErr').textContent = 'カメラの準備中です。少し待ってから押してください'; return; }
+    var scale = Math.min(1, 640 / v.videoWidth);
+    var c = document.createElement('canvas'); c.width = Math.round(v.videoWidth * scale); c.height = Math.round(v.videoHeight * scale);
+    var ctx = c.getContext('2d'); ctx.translate(c.width, 0); ctx.scale(-1, 1); ctx.drawImage(v, 0, 0, c.width, c.height);
+    var data = c.toDataURL('image/jpeg', 0.7);
+    $('ovPhoto').src = data;
+    $('camPanel').classList.add('hidden');
+    submitPunch(data);
+  };
+}
+function planTextOf(code){
+  var segs = state.plan.byStaff[code];
+  if (!segs || !segs.length) return '';
+  return segs.map(function(s){ return s.start + '～' + s.end; }).join('、');
+}
+function planStartOf(code){
+  var segs = state.plan.byStaff[code];
+  if (!segs || !segs.length) return '99:99';
+  return segs.map(function(s){ return s.start; }).sort()[0];
+}
+function clearSelection(){ state.selected = null; $('selName').textContent = ''; $('btnIn').disabled = true; $('btnOut').disabled = true; }
+function renderGrid(){
+  var grid = $('grid'); grid.innerHTML = '';
+  function note(msg){ var e = document.createElement('div'); e.className = 'gridNote'; e.textContent = msg; grid.appendChild(e); }
+  var list, showPlan = false;
+  if (state.tab === 'today') {
+    if (!state.plan.found) { note('本日の出勤予定は未登録です。「すべて」から選んでください。'); return; }
+    showPlan = true;
+    list = state.staff.concat(state.otherStaff).filter(function(s){ return !!state.plan.byStaff[s.code]; });
+    list.sort(function(a, b){ var sa = planStartOf(a.code), sb = planStartOf(b.code); return sa < sb ? -1 : (sa > sb ? 1 : 0); });
+    if (!list.length) { note('本日の出勤予定はありません。'); return; }
+  } else if (state.tab === 'mine') {
+    list = state.staff;
+  } else {
+    list = state.otherStaff;
+  }
+  list.forEach(function(s){
+    var d = document.createElement('div'); d.className = 'staff' + (state.selected && state.selected.code === s.code ? ' sel' : '');
+    var stt = state.status[s.code];
+    var stColor = !stt ? '#8a8a8a' : (stt.state === 'working' ? '#2e9e4f' : (stt.state === 'done' ? '#2f6fb2' : '#d97c1e'));
+    var ic = document.createElement('div'); ic.className = 'ic'; ic.style.background = stColor; if (s.icon) { ic.textContent = s.icon; ic.style.fontSize = '36px'; } else { ic.textContent = iconChar(s.name); } d.appendChild(ic);
+    var tx = document.createElement('div'); tx.className = 'tx';
+    var cd = document.createElement('div'); cd.className = 'cd'; cd.textContent = s.code; tx.appendChild(cd);
+    var nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = s.name; tx.appendChild(nm);
+    if (showPlan) { var pt = document.createElement('div'); pt.className = 'pt'; pt.textContent = planTextOf(s.code); tx.appendChild(pt); }
+    if (stt && (stt.inTime || stt.outTime)) { var stl = document.createElement('div'); stl.className = 'st'; stl.textContent = (stt.inTime || '') + (stt.outTime ? '～' + stt.outTime : ''); tx.appendChild(stl); }
+    d.appendChild(tx);
+    var pressTimer = null, longPressed = false;
+    d.addEventListener('pointerdown', function(){ longPressed = false; pressTimer = setTimeout(function(){ longPressed = true; openIconPicker(s); }, 650); });
+    ['pointerup','pointerleave','pointercancel'].forEach(function(ev){ d.addEventListener(ev, function(){ if (pressTimer) clearTimeout(pressTimer); }); });
+    d.onclick = function(){ if (longPressed) { longPressed = false; return; } state.selected = s; $('selName').textContent = s.name; $('btnIn').disabled = false; $('btnOut').disabled = false; renderGrid(); };
+    grid.appendChild(d);
+  });
+  if (!grid.children.length) note('表示するスタッフがいません');
+}
+function submitPunch(photo){
+  if (!pendingPunch) return;
+  var staff = pendingPunch.staff, type = pendingPunch.type; pendingPunch = null;
+  $('btnIn').disabled = true; $('btnOut').disabled = true;
+  var req = { token: state.token, staffCode: staff.code, type: type, eventId: 'ev' + Date.now() + Math.floor(Math.random()*1000000), photo: photo };
+  apiCall(Object.assign({ action: 'punch' }, req), function(res){
+    if (res && res.ok) {
+      $('ovName').textContent = res.staffName + 'さん';
+      $('ovMain').textContent = res.type + '打刻完了 ✓';
+      $('ovTime').textContent = res.time;
+      $('ovSub').textContent = res.duplicate ? 'すでに記録されています' : (res.type === '出勤' ? 'おはようございます！' : 'お疲れさまでした！');
+      $('ovPhoto').classList.toggle('hidden', !req.photo);
+      $('overlay').classList.remove('hidden');
+      var punchedStaff = staff;
+      setTimeout(function(){
+        $('overlay').classList.add('hidden'); clearSelection(); renderGrid();
+        afterPunch(punchedStaff, res);
+      }, 2000);
+    } else {
+      showBanner('保存されていません：' + ((res && res.error) || '通信エラー') + '　もう一度押してください');
+      $('btnIn').disabled = false; $('btnOut').disabled = false;
+      if (res && res.needRegister) { store.remove(TOKEN_KEY); location.reload(); }
+    }
+  }, function(){
+    showBanner('保存されていません：通信エラー　もう一度押してください');
+    $('btnIn').disabled = false; $('btnOut').disabled = false;
+  });
+}
+var pendingReason = null, pendingStaff = null, selectedReason = '';
+var REASON_OPTS = {
+  '早出': ['開店準備のため','業務量・混雑への対応','社員からの指示','シフト変更・交代','その他'],
+  '延長': ['お客様対応・混雑','閉店作業の遅れ','業務が終わらなかったため','社員からの指示','シフト変更・交代','その他']
+};
+function fillTimeSelects(hSel, mSel){
+  [hSel, mSel].forEach(function(sel, idx){
+    sel.innerHTML = '';
+    var o = document.createElement('option'); o.value=''; o.textContent='--'; sel.appendChild(o);
+    var max = idx === 0 ? 24 : 60;
+    for (var i=0; i<max; i++){ var op=document.createElement('option'); op.value=('0'+i).slice(-2); op.textContent = idx===0 ? i : ('0'+i).slice(-2); sel.appendChild(op); }
+  });
+}
+function afterPunch(staff, res){
+  pendingStaff = staff; pendingReason = res.reasonRequest || null;
+  if (res.needsStartDeclaration) { openDecl(staff, res); return; }
+  if (pendingReason) { openReason(staff, res); return; }
+  if (staff && !staff.icon) openIconPicker(staff);
+}
+function openDecl(staff, res){
+  var d = res.needsStartDeclaration;
+  $('declDesc').innerHTML = '本日のシフト予定：' + d.plannedText + '（参考表示）<br>シフト予定にかかわらず、実際に勤務を開始した時刻を入力してください。<br>直近1か月の打刻忘れ：' + d.forgotCount + '回';
+  fillTimeSelects($('declH'), $('declM'));
+  $('declNote').value = ''; $('declErr').textContent = '';
+  $('declDesc').classList.remove('hidden');
+  ['declSend','declSkip'].forEach(function(id){ $(id).classList.remove('hidden'); });
+  document.querySelectorAll('#declPanel label, #declPanel .timeRow, #declPanel textarea').forEach(function(el){ el.classList.remove('hidden'); });
+  $('declDone').classList.add('hidden');
+  $('declPanel').classList.remove('hidden');
+  $('declSend').onclick = function(){
+    if (!$('declH').value || !$('declM').value) { $('declErr').textContent = '出勤時刻を入力してください'; return; }
+    apiCall({ action: 'declareStart', token: state.token, staffCode: staff.code, declaredStart: $('declH').value + ':' + $('declM').value, note: $('declNote').value, punchEventId: res.eventId }, function(r){
+      if (r && r.ok) {
+        $('declDesc').classList.add('hidden');
+        ['declSend','declSkip'].forEach(function(id){ $(id).classList.add('hidden'); });
+        document.querySelectorAll('#declPanel label, #declPanel .timeRow, #declPanel textarea').forEach(function(el){ el.classList.add('hidden'); });
+        $('declCount').textContent = d.forgotCount;
+        $('declDone').classList.remove('hidden');
+        $('declClose').onclick = function(){ $('declPanel').classList.add('hidden'); if (pendingReason) openReason(staff, res); else if (staff && !staff.icon) openIconPicker(staff); };
+      }
+      else $('declErr').textContent = (r && r.error) || '申請できませんでした';
+    }, function(){ $('declErr').textContent = '通信エラーで申請できませんでした'; });
+  };
+  $('declSkip').onclick = function(){ $('declPanel').classList.add('hidden'); if (pendingReason) openReason(staff, res); };
+}
+function openReason(staff, res){
+  var rq = res.reasonRequest; selectedReason = '';
+  $('reasonTitle').textContent = rq.kind + 'の理由を教えてください';
+  $('reasonDesc').innerHTML = '予定より ' + rq.minutes + '分 ' + (rq.kind === '早出' ? '早く' : '長く') + '勤務しています。<br>' + rq.kind + '勤務には、原則として事前に社員の承諾が必要です。';
+  var box = $('reasonOpts'); box.innerHTML = '';
+  REASON_OPTS[rq.kind].forEach(function(opt){
+    var d = document.createElement('div'); d.className = 'reasonOpt'; d.textContent = opt;
+    d.onclick = function(){ selectedReason = opt; box.querySelectorAll('.reasonOpt').forEach(function(x){ x.classList.remove('sel'); }); d.classList.add('sel'); $('reasonFree').classList.toggle('hidden', opt !== 'その他'); };
+    box.appendChild(d);
+  });
+  $('reasonFree').value = ''; $('reasonFree').classList.add('hidden'); $('reasonErr').textContent = '';
+  $('reasonPanel').classList.remove('hidden');
+  function save(reason){
+    apiCall({ action: 'saveReason', token: state.token, staffCode: staff.code, kind: rq.kind, minutes: rq.minutes, reason: reason, eventId: res.eventId }, function(r){
+      $('reasonPanel').classList.add('hidden');
+      if (staff && !staff.icon) openIconPicker(staff);
+    }, function(){ $('reasonPanel').classList.add('hidden'); });
+  }
+  $('reasonSend').onclick = function(){
+    if (!selectedReason) { $('reasonErr').textContent = '理由を選んでください'; return; }
+    var reason = selectedReason === 'その他' ? $('reasonFree').value.trim() : selectedReason;
+    if (selectedReason === 'その他' && !reason) { $('reasonErr').textContent = '理由を入力してください'; return; }
+    save(reason);
+  };
+  $('reasonSkip').onclick = function(){ save(''); };
+}
+function initMain(){
+  apiCall({ action: 'init', token: state.token }, function(res){
+    if (!res || !res.ok) { $('viewRegister').classList.remove('hidden'); $('viewMain').classList.add('hidden'); if (res && res.error) $('regErr').textContent = res.error; return; }
+    state.staff = res.staff; state.otherStaff = res.otherStaff; state.plan = res.plan || { found: false, byStaff: {} }; state.status = res.status || {};
+    $('viewRegister').classList.add('hidden'); $('viewMain').classList.remove('hidden');
+    renderGrid(); startClock(); bindCamFlow();
+  }, function(){ showBanner('サーバーに接続できませんでした'); });
+}
+document.querySelectorAll('.storeBtn').forEach(function(b){
+  b.onclick = function(){ document.querySelectorAll('.storeBtn').forEach(function(x){ x.classList.remove('sel'); }); b.classList.add('sel'); state.regStore = b.getAttribute('data-store'); };
+});
+$('regBtn').onclick = function(){
+  if (!state.regStore) { $('regErr').textContent = '店舗を選んでください'; return; }
+  apiCall({ action: 'register', adminCode: $('regCode').value, storeKey: state.regStore, deviceName: $('regName').value }, function(res){
+    if (res && res.ok) { store.set(TOKEN_KEY, res.token); state.token = res.token; initMain(); }
+    else $('regErr').textContent = (res && res.error) || '登録できませんでした';
+  }, function(){ $('regErr').textContent = '通信エラーで登録できませんでした'; });
+};
+function switchTab(name){
+  state.tab = name;
+  [['tabToday','today'],['tabMine','mine'],['tabOther','other']].forEach(function(pair){ $(pair[0]).classList.toggle('sel', pair[1] === name); });
+  clearSelection(); renderGrid();
+}
+$('tabToday').onclick = function(){ switchTab('today'); };
+$('tabMine').onclick = function(){ switchTab('mine'); };
+$('tabOther').onclick = function(){ switchTab('other'); };
+$('btnIn').onclick = function(){ doPunch('出勤'); };
+$('btnOut').onclick = function(){ doPunch('退勤'); };
+$('iconSkip').onclick = function(){ $('iconPicker').classList.add('hidden'); };
+$('gear').onclick = function(){ $('settings').classList.remove('hidden'); };
+$('closeSettings').onclick = function(){ $('settings').classList.add('hidden'); };
+$('disableBtn').onclick = function(){
+  apiCall({ action: 'disable', adminCode: $('setCode').value, token: state.token }, function(res){
+    if (res && res.ok) { store.remove(TOKEN_KEY); location.reload(); }
+    else $('setErr').textContent = (res && res.error) || '解除できませんでした';
+  }, function(){ $('setErr').textContent = '通信エラーで解除できませんでした'; });
+};
+function silentRefresh(){
+  if (!state.token || $('viewMain').classList.contains('hidden')) return;
+  apiCall({ action: 'init', token: state.token }, function(res){
+    if (!res || !res.ok) return;
+    var selCode = state.selected ? state.selected.code : '';
+    state.staff = res.staff; state.otherStaff = res.otherStaff; state.plan = res.plan || state.plan; state.status = res.status || state.status;
+    if (selCode) {
+      var found = null;
+      state.staff.concat(state.otherStaff).forEach(function(s){ if (s.code === selCode) found = s; });
+      state.selected = found;
+      if (!found) { $('selName').textContent = ''; $('btnIn').disabled = true; $('btnOut').disabled = true; }
+    }
+    renderGrid();
+  }, function(){});
+}
+setInterval(silentRefresh, 5 * 60 * 1000);
+document.addEventListener('visibilitychange', function(){ if (!document.hidden) silentRefresh(); });
+if (state.token) initMain(); else { $('viewRegister').classList.remove('hidden'); }
+</script>
+</body>
+</html>
