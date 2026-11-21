@@ -513,7 +513,7 @@ document.getElementById('fillBtn').addEventListener('click', function () {
   busy(true); setMsg('注文メールで補完中...');
   callApi('fillOrders').then(function (res) {
     busy(false);
-    setMsg('補完しました（摘要 ' + res.tekiyo + '件 / 部門 ' + res.bumon + '件 / そのままOKになった ' + res.ok + '件）。', 'ok');
+    setMsg('補完しました（摘要 ' + res.tekiyo + '件 / 部門 ' + res.bumon + '件 / 科目 ' + (res.kamoku || 0) + '件 / そのままOKになった ' + res.ok + '件）。', 'ok');
     loadLines();
   }).catch(function (e) { busy(false); setMsg(e.message, 'err'); });
 });
