@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8"><title>接続テスト</title></head>
+<body>
+<h2>接続テスト</h2>
+<div id="log" style="white-space:pre-wrap;font-family:monospace"></div>
+<script>
+var EXEC = 'https://script.google.com/macros/s/AKfycbzv31BsMHwTv4A_Ev_7MT23AfHcJqLgBvQQC_OychVcsKDcbY29QafwaotsUWn-9tD25w/exec';
+var logEl = document.getElementById('log');
+function log(m){ logEl.textContent += m + '\n'; }
+log('start');
+fetch(EXEC, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'init', token: 'probe-invalid-token' }) })
+  .then(function(r){ log('fetch status: ' + r.status); return r.text(); })
+  .then(function(t){ log('body: ' + t.slice(0, 300)); log('RESULT: READABLE'); })
+  .catch(function(e){ log('fetch error: ' + e.message); log('RESULT: BLOCKED'); });
+</script>
+</body></html>
