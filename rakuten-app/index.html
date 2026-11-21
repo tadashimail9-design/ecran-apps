@@ -33,6 +33,11 @@
   td input.reg { width: 130px; }
   td select { max-width: 130px; }
   .src { color: #5f6368; font-size: 11px; }
+  .rcpt { margin-top: 4px; padding: 2px 8px; font-size: 12px; border-color: #1a73e8; color: #1a73e8; }
+  .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 50; padding: 16px; box-sizing: border-box; }
+  .modal .box { background: #fff; border-radius: 8px; max-width: 560px; margin: 0 auto; padding: 12px; max-height: 100%; overflow: auto; box-sizing: border-box; }
+  .modal img { width: 100%; height: auto; }
+  .modal .cap { font-size: 13px; margin: 8px 0; white-space: pre-wrap; }
   .monthinfo { border: 1px solid #dadce0; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
   .monthinfo label { margin-right: 4px; }
   .monthinfo .item { margin-right: 16px; white-space: nowrap; }
@@ -80,7 +85,18 @@
 
 <div class="bar">
   <button class="primary" id="finalizeBtn">弥生CSVを作成する</button>
+  <button id="fillBtn">注文メールで補完する</button>
   <span id="csvLink"></span>
+</div>
+
+<div class="modal" id="receiptModal">
+  <div class="box">
+    <div style="text-align:right;"><button id="receiptClose">閉じる</button></div>
+    <img id="receiptImg" alt="レシート画像">
+    <div class="cap" id="receiptCap"></div>
+    <div id="receiptFallback" style="display:none; font-size:13px;">画像を表示できませんでした。<br></div>
+    <a id="receiptDrive" href="#" target="_blank">Driveで開く</a>
+  </div>
 </div>
 
 <div class="tablewrap">
@@ -100,6 +116,7 @@ var EXEC_URL = 'https://script.google.com/macros/s/AKfycbzHfQ7iSbmVaUKKEkLViIHfg
 var MASTERS = { kamokuList: [], bumonList: [], taxList: [] };
 var CURRENT = null;
 var LINES = [];
+var RECEIPTS = [];
 
 function esc(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
@@ -153,6 +170,72 @@ function callApi(action, params, timeoutMs) {
   return tryOnce(1);
 }
 
+function canonLite(v) {
+  return String(v || '').normalize('NFKC').replace(/[\s　・]/g, '').toUpperCase();
+}
+function dayNum(v) {
+  var m = String(v || '').match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+  if (!m) return null;
+  return Math.floor(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) / 86400000);
+}
+// 判定と同じ条件 (金額が一致 かつ 日付が3日以内) で、この行に対応するレシートを探す
+function matchReceipt(L) {
+  var amt = Number(L.useAmt), dn = dayNum(L.date);
+  if (!amt || dn === null) return null;
+  var cands = [];
+  RECEIPTS.forEach(function (r) {
+    if (r.memo && r.memo.indexOf('画像削除済') >= 0) return;
+    var rd = dayNum(r.date);
+    if (Number(r.total) === amt && rd !== null && Math.abs(rd - dn) <= 3) cands.push({ r: r, diff: Math.abs(rd - dn) });
+  });
+  if (!cands.length) return null;
+  if (cands.length === 1) return cands[0].r;
+  var mc = canonLite(L.merchant);
+  for (var i = 0; i < cands.length; i++) {
+    var sc = canonLite(cands[i].r.store);
+    if (sc && mc && (mc.indexOf(sc) >= 0 || sc.indexOf(mc) >= 0)) return cands[i].r;
+  }
+  cands.sort(function (a, b) { return a.diff - b.diff; });
+  return cands[0].r;
+}
+function attachReceiptButtons() {
+  var tb = document.getElementById('linesBody');
+  if (!tb) return;
+  for (var idx = 0; idx < tb.children.length && idx < LINES.length; idx++) {
+    var cell = tb.children[idx].children[1];
+    if (!cell || cell.querySelector('.rcpt')) continue;
+    var r = matchReceipt(LINES[idx]);
+    if (!r) continue;
+    var b = document.createElement('button');
+    b.className = 'rcpt';
+    b.textContent = '【レシート】';
+    (function (rec) { b.addEventListener('click', function () { openReceipt(rec); }); })(r);
+    cell.appendChild(document.createElement('br'));
+    cell.appendChild(b);
+  }
+}
+function loadReceipts() {
+  callApi('receipts').then(function (res) {
+    RECEIPTS = res.receipts || [];
+    attachReceiptButtons();
+  }).catch(function () { /* レシート表示は補助機能なので失敗しても無視する */ });
+}
+function openReceipt(r) {
+  var modal = document.getElementById('receiptModal');
+  var img = document.getElementById('receiptImg');
+  var fb = document.getElementById('receiptFallback');
+  fb.style.display = 'none';
+  img.style.display = 'block';
+  img.onerror = function () { img.style.display = 'none'; fb.style.display = 'block'; };
+  img.src = 'https://drive.google.com/thumbnail?id=' + r.fileId + '&sz=w1600';
+  document.getElementById('receiptCap').textContent =
+    r.store + ' / ' + r.date + ' / ' + yen(r.total) + '円' +
+    (r.regNo ? '\n登録番号 ' + r.regNo : '') +
+    (r.items ? '\n品目: ' + r.items : '');
+  document.getElementById('receiptDrive').href = 'https://drive.google.com/file/d/' + r.fileId + '/view';
+  modal.style.display = 'block';
+}
+
 function loadAll(selectId) {
   setMsg('読み込み中...');
   callApi('boot', { monthId: selectId || '' }).then(function (res) {
@@ -170,6 +253,7 @@ function loadAll(selectId) {
       CURRENT = res.month;
       LINES = res.lines;
       render();
+      loadReceipts();
     }
     setMsg('');
   }).catch(function (e) { setMsg(e.message, 'err'); });
@@ -183,6 +267,7 @@ function loadLines() {
     CURRENT = res.month;
     LINES = res.lines;
     render();
+    loadReceipts();
     setMsg('');
   }).catch(function (e) { setMsg(e.message, 'err'); });
 }
@@ -218,6 +303,7 @@ function renderChips() {
   tb.innerHTML = '';
   LINES.forEach(function (L, idx) { tb.appendChild(rowEl(L, idx)); });
   document.getElementById('linesTable').style.display = 'table';
+  attachReceiptButtons();
 }
 
 function optionsHtml(list, current) {
@@ -382,6 +468,7 @@ function pumpReceiptQueue() {
   processReceiptFile(job.file).then(function (r) {
     job.item.textContent = 'レシート' + job.n + ': ✓ ' + r.storeName + ' / ' + r.date + ' / ' + Number(r.total).toLocaleString() + '円' +
       (r.regNo ? ' / 登録番号 ' + r.regNo : ' / 登録番号なし');
+    loadReceipts();
   }).catch(function (e) {
     job.item.textContent = 'レシート' + job.n + ': ✗ 読み取りできませんでした（' + e.message + '）';
   }).then(function () {
@@ -413,6 +500,22 @@ document.getElementById('receiptInput').addEventListener('change', function (ev)
   var files = ev.target.files;
   for (var i = 0; i < files.length; i++) enqueueReceipt(files[i]);
   ev.target.value = '';
+});
+
+document.getElementById('receiptClose').addEventListener('click', function () {
+  document.getElementById('receiptModal').style.display = 'none';
+});
+document.getElementById('receiptModal').addEventListener('click', function (ev) {
+  if (ev.target === this) this.style.display = 'none';
+});
+document.getElementById('fillBtn').addEventListener('click', function () {
+  if (!CURRENT) return;
+  busy(true); setMsg('注文メールで補完中...');
+  callApi('fillOrders').then(function (res) {
+    busy(false);
+    setMsg('補完しました（摘要 ' + res.tekiyo + '件 / 部門 ' + res.bumon + '件 / そのままOKになった ' + res.ok + '件）。', 'ok');
+    loadLines();
+  }).catch(function (e) { busy(false); setMsg(e.message, 'err'); });
 });
 
 loadAll();
