@@ -225,6 +225,12 @@ function statusHtml(L, idx) {
       h += '<label style="font-size:12px;"><input type="checkbox" id="diff_' + idx + '"> 差額を確認した</label>';
     }
   }
+  if (Number(L.billAmt) === 0) {
+    h += '<div style="font-size:12px;"><label><input type="checkbox" checked disabled> 今月は対象外にする</label></div>';
+  } else {
+    h += '<div style="font-size:12px;"><label><input type="checkbox" id="ex_' + idx + '"' +
+      (L.status === '対象外' ? ' checked' : '') + '> 今月は対象外にする</label></div>';
+  }
   return h;
 }
 
@@ -265,7 +271,9 @@ function rowEl(L, idx) {
 function saveLine(idx) {
   var L = LINES[idx];
   var diffEl = document.getElementById('diff_' + idx);
+  var exEl = document.getElementById('ex_' + idx);
   var p = {
+    exclude: exEl ? exEl.checked : (L.status === '対象外' && Number(L.billAmt) !== 0),
     monthId: CURRENT.monthId, rowIndex: L.rowIndex,
     tekiyo: document.getElementById('te_' + idx).value,
     regNo: document.getElementById('rg_' + idx).value.trim(),
