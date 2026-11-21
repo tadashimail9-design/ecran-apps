@@ -106,10 +106,11 @@ function busy(b) {
 }
 
 // GASのdoPostへJSONで送る (勤怠アプリと同じ実績のある方式)
-function callApi(action, params) {
+// 応答が途切れた場合は自動で最大3回まで送り直す (finalizeとintakeは二重実行防止のため送り直さない)
+function callApiOnce(action, params) {
   var body = Object.assign({ action: action }, params || {});
   var ctl = new AbortController();
-  var timer = setTimeout(function () { ctl.abort(); }, 120000);
+  var timer = setTimeout(function () { ctl.abort(); }, 30000);
   return fetch(EXEC_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain' },
@@ -122,9 +123,23 @@ function callApi(action, params) {
     return d.result;
   }).catch(function (e) {
     clearTimeout(timer);
-    if (e.name === 'AbortError') throw new Error('応答がありません。通信状態を確認して、もう一度お試しください。');
     throw e;
   });
+}
+
+function callApi(action, params) {
+  var noRetry = (action === 'finalize' || action === 'intake');
+  var attempts = noRetry ? 1 : 3;
+  function tryOnce(n) {
+    return callApiOnce(action, params).catch(function (e) {
+      if (n >= attempts) {
+        if (e.name === 'AbortError') throw new Error('応答がありません。通信状態を確認して「再読み込み」を押してください。');
+        throw e;
+      }
+      return new Promise(function (res) { setTimeout(res, 1500); }).then(function () { return tryOnce(n + 1); });
+    });
+  }
+  return tryOnce(1);
 }
 
 function loadAll(selectId) {
