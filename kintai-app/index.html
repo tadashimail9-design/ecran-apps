@@ -234,10 +234,19 @@ function openIconPicker(staff){
   ICON_SET.forEach(function(ic){
     var b = document.createElement('button'); b.className = 'iconBtn'; b.textContent = ic;
     b.onclick = function(){
+      // 画面はすぐに更新し、保存だけ裏側で行う（失敗時は元に戻す）。
+      var oldIcon = staff.icon || '';
+      staff.icon = ic;
+      $('iconPicker').classList.add('hidden');
+      renderGrid();
+      function rollback(){
+        if (staff.icon === ic) staff.icon = oldIcon;
+        renderGrid();
+        showBanner('アイコンを保存できませんでした。長押しして再度設定してください');
+      }
       apiCall({ action: 'setIcon', token: state.token, staffCode: staff.code, icon: ic }, function(res){
-        if (res && res.ok) { staff.icon = ic; $('iconPicker').classList.add('hidden'); renderGrid(); showBanner('アイコンを設定しました'); }
-        else showBanner('アイコンを保存できませんでした');
-      }, function(){ showBanner('アイコンを保存できませんでした'); });
+        if (!res || !res.ok) rollback();
+      }, rollback);
     };
     g.appendChild(b);
   });
@@ -299,7 +308,14 @@ function planStartOf(code){
   if (!segs || !segs.length) return '99:99';
   return segs.map(function(s){ return s.start; }).sort()[0];
 }
-function clearSelection(){ state.selected = null; $('selName').textContent = ''; $('btnIn').disabled = true; $('btnOut').disabled = true; }
+function updatePunchButtons(){
+  var s = state.selected, stt = s && state.status[s.code];
+  // 色（state）ではなく最後の打刻そのもので判定する。要確認でも勤務中なら退勤できる。
+  var last = stt ? (stt.lastType || (stt.state === 'working' ? '出勤' : (stt.state === 'done' ? '退勤' : ''))) : '';
+  $('btnIn').disabled = !s || punchSaving || last === '出勤';
+  $('btnOut').disabled = !s || punchSaving || last === '退勤';
+}
+function clearSelection(){ state.selected = null; $('selName').textContent = ''; updatePunchButtons(); }
 function renderGrid(){
   var grid = $('grid'); grid.innerHTML = '';
   function note(msg){ var e = document.createElement('div'); e.className = 'gridNote'; e.textContent = msg; grid.appendChild(e); }
@@ -329,38 +345,62 @@ function renderGrid(){
     var pressTimer = null, longPressed = false;
     d.addEventListener('pointerdown', function(){ longPressed = false; pressTimer = setTimeout(function(){ longPressed = true; openIconPicker(s); }, 650); });
     ['pointerup','pointerleave','pointercancel'].forEach(function(ev){ d.addEventListener(ev, function(){ if (pressTimer) clearTimeout(pressTimer); }); });
-    d.onclick = function(){ if (longPressed) { longPressed = false; return; } state.selected = s; $('selName').textContent = s.name; $('btnIn').disabled = false; $('btnOut').disabled = false; renderGrid(); };
+    d.onclick = function(){ if (longPressed) { longPressed = false; return; } state.selected = s; $('selName').textContent = s.name; updatePunchButtons(); renderGrid(); };
     grid.appendChild(d);
   });
   if (!grid.children.length) note('表示するスタッフがいません');
+}
+var punchSaving = false, statusRevision = 0;
+function applyPunchStatus(staff, res){
+  var code = String(staff.code), old = state.status[code] || {};
+  var next = { state: '', inTime: old.inTime || '', outTime: old.outTime || '', lastType: res.type };
+  if (res.type === '出勤') {
+    next.state = 'working'; next.inTime = next.inTime || res.time; next.outTime = '';
+  } else {
+    next.state = res.flag && res.flag.indexOf('出勤打刻なし') >= 0 ? 'check' : 'done';
+    next.outTime = res.time;
+  }
+  state.status[code] = next;
+  statusRevision++;
+  updatePunchButtons();
 }
 function submitPunch(photo){
   if (!pendingPunch) return;
   var staff = pendingPunch.staff, type = pendingPunch.type; pendingPunch = null;
   $('btnIn').disabled = true; $('btnOut').disabled = true;
   var req = { token: state.token, staffCode: staff.code, type: type, eventId: 'ev' + Date.now() + Math.floor(Math.random()*1000000), photo: photo };
+  // 撮影後すぐに挨拶を表示。ただしサーバー確認前に「打刻完了」とは表示しない。
+  var now = new Date();
+  $('ovName').textContent = staff.name + 'さん';
+  $('ovMain').textContent = type + 'を記録中…';
+  $('ovTime').textContent = ('0'+now.getHours()).slice(-2) + ':' + ('0'+now.getMinutes()).slice(-2);
+  $('ovSub').textContent = (type === '出勤' ? 'おはようございます！' : 'お疲れさまでした！') + '（保存中）';
+  $('ovPhoto').classList.toggle('hidden', !req.photo);
+  $('overlay').classList.remove('hidden');
+  punchSaving = true;
+  function fail(msg){
+    punchSaving = false;
+    $('overlay').classList.add('hidden');
+    showBanner('保存されていません：' + msg + '　もう一度押してください');
+    updatePunchButtons();
+  }
   apiCall(Object.assign({ action: 'punch' }, req), function(res){
+    punchSaving = false;
     if (res && res.ok) {
+      applyPunchStatus(staff, res); // 退勤後の緑→青は5分更新を待たず即時反映
       $('ovName').textContent = res.staffName + 'さん';
       $('ovMain').textContent = res.type + '打刻完了 ✓';
       $('ovTime').textContent = res.time;
       $('ovSub').textContent = res.duplicate ? 'すでに記録されています' : (res.type === '出勤' ? 'おはようございます！' : 'お疲れさまでした！');
-      $('ovPhoto').classList.toggle('hidden', !req.photo);
-      $('overlay').classList.remove('hidden');
-      var punchedStaff = staff;
       setTimeout(function(){
         $('overlay').classList.add('hidden'); clearSelection(); renderGrid();
-        afterPunch(punchedStaff, res);
+        afterPunch(staff, res);
       }, 2000);
     } else {
-      showBanner('保存されていません：' + ((res && res.error) || '通信エラー') + '　もう一度押してください');
-      $('btnIn').disabled = false; $('btnOut').disabled = false;
+      fail((res && res.error) || '通信エラー');
       if (res && res.needRegister) { store.remove(TOKEN_KEY); location.reload(); }
     }
-  }, function(){
-    showBanner('保存されていません：通信エラー　もう一度押してください');
-    $('btnIn').disabled = false; $('btnOut').disabled = false;
-  });
+  }, function(){ fail('通信エラー'); });
 }
 var pendingReason = null, pendingStaff = null, selectedReason = '';
 var REASON_OPTS = {
@@ -471,9 +511,10 @@ $('disableBtn').onclick = function(){
   }, function(){ $('setErr').textContent = '通信エラーで解除できませんでした'; });
 };
 function silentRefresh(){
-  if (!state.token || $('viewMain').classList.contains('hidden')) return;
+  if (!state.token || punchSaving || $('viewMain').classList.contains('hidden')) return;
+  var requestedRevision = statusRevision;
   apiCall({ action: 'init', token: state.token }, function(res){
-    if (!res || !res.ok) return;
+    if (!res || !res.ok || punchSaving || requestedRevision !== statusRevision) return;
     var selCode = state.selected ? state.selected.code : '';
     state.staff = res.staff; state.otherStaff = res.otherStaff; state.plan = res.plan || state.plan; state.status = res.status || state.status;
     if (selCode) {
@@ -482,6 +523,7 @@ function silentRefresh(){
       state.selected = found;
       if (!found) { $('selName').textContent = ''; $('btnIn').disabled = true; $('btnOut').disabled = true; }
     }
+    updatePunchButtons();
     renderGrid();
   }, function(){});
 }
