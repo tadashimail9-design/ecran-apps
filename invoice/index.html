@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>伝票AI</title>
+<meta name="theme-color" content="#205c40">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="伝票AI">
+<link rel="apple-touch-icon" sizes="180x180" href="icon.png">
+<link rel="icon" type="image/png" href="icon.png">
+<style>
+body{margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#205c40;color:#fff;font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;text-align:center;padding:24px;box-sizing:border-box}
+img.icon{width:120px;height:120px;border-radius:24px}
+h1{font-size:26px;margin:18px 0 6px}
+p{margin:6px 0;font-size:16px;line-height:1.7}
+.steps{margin-top:18px;font-size:15px;line-height:1.9;opacity:.95}
+a.open{display:inline-block;margin-top:26px;padding:16px 32px;border-radius:12px;background:#fff;color:#205c40;font-size:20px;font-weight:700;text-decoration:none}
+</style>
+<script>
+(function(){
+  var APP = "https://script.google.com/macros/s/AKfycbzS03Kr4cLsL3qW7djOZhlLJ-FJ-oWuKbFPZW8t_wiyzpCIOKGGEQ2ueUP8GpSJLl5G/exec";
+  var standalone = (window.navigator.standalone === true) || window.matchMedia("(display-mode: standalone)").matches;
+  if (standalone) location.replace(APP);
+  window.__openApp = function(){ location.href = APP; };
+})();
+</script>
+</head>
+<body>
+<img class="icon" src="icon.png" alt="伝票AI">
+<h1>伝票AI</h1>
+<p>このページをホーム画面に追加すると、<br>アイコンから伝票AIを直接開けます。</p>
+<div class="steps">
+追加のしかた<br>
+1. 下の共有ボタンをタップ<br>
+2.「ホーム画面に追加」を選ぶ<br>
+3.「Webアプリとして開く」が出たらONにして「追加」
+</div>
+<a class="open" href="#" onclick="__openApp(); return false;">今すぐアプリを開く</a>
+</body>
+</html>
