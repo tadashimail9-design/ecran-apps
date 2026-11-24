@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>イオンカード仕訳</title>
+<style>
+  body { font-family: sans-serif; margin: 0; background: #f6f3ee; color: #333; }
+  header { background: #4a6741; color: #fff; padding: 12px 16px; font-size: 18px; font-weight: bold; }
+  main { padding: 12px 16px 40px; max-width: 860px; margin: 0 auto; }
+  .tabs { display: flex; gap: 8px; margin: 10px 0; flex-wrap: wrap; }
+  .tab { padding: 8px 14px; border: 1px solid #4a6741; border-radius: 999px; background: #fff; cursor: pointer; font-size: 15px; }
+  .tab.on { background: #4a6741; color: #fff; }
+  .card { background: #fff; border-radius: 10px; padding: 14px; margin: 12px 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  textarea { width: 100%; box-sizing: border-box; min-height: 130px; font-size: 14px; }
+  input[type="month"], select { font-size: 15px; padding: 4px; }
+  button.act { background: #4a6741; color: #fff; border: none; border-radius: 8px; padding: 10px 18px; font-size: 16px; cursor: pointer; }
+  button.act:disabled { background: #aaa; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { border-bottom: 1px solid #eee; padding: 5px 4px; text-align: left; }
+  td.num, th.num { text-align: right; }
+  .warn { background: #fdf3e0; border: 1px solid #e8c97a; border-radius: 8px; padding: 10px 12px; margin: 10px 0; }
+  .bad { color: #b00020; font-weight: bold; }
+  .ok { color: #4a6741; font-weight: bold; }
+  .muted { color: #777; font-size: 13px; }
+  .sum { font-size: 16px; line-height: 1.9; }
+  a.btn { display: inline-block; background: #4a6741; color: #fff; text-decoration: none; border-radius: 8px; padding: 10px 18px; font-size: 16px; }
+</style>
+</head>
+<body>
+<header>イオンカード仕訳</header>
+<main>
+  <div id="hojoWarn"></div>
+  <div class="tabs" id="cardTabs"></div>
+  <div class="tabs" id="modeTabs">
+    <button class="tab on" data-mode="prov">一時記帳（4日）</button>
+    <button class="tab" data-mode="final">本記帳（22日）</button>
+  </div>
+
+  <section id="viewProv">
+    <div class="card">
+      <div>対象月：<input type="month" id="provYm"> の利用分（11日〜末日が対象です）</div>
+      <p class="muted">暮らしのマネーサイトの「最近のご利用」をコピーして、そのまま貼り付けてください。</p>
+      <textarea id="pasteText" placeholder="ここに貼り付け"></textarea>
+      <p><button class="act" id="btnPaste">読み込む</button> <span id="pasteMsg"></span></p>
+    </div>
+    <div class="card" id="provResult" style="display:none">
+      <div class="sum" id="provSums"></div>
+      <table id="provTable"><thead><tr>
+        <th>日付</th><th>利用先</th><th class="num">金額</th><th>科目</th><th>税区分</th><th>対象</th>
+      </tr></thead><tbody></tbody></table>
+      <p><button class="act" id="btnProvCsv">一時記帳CSVを作る</button> <span id="provCsvMsg"></span></p>
+      <p class="muted">CSVは弥生会計の仕訳日記帳から取り込んでください。日付は月末日、摘要は「○月末日 fカード／イオンカード」です。</p>
+    </div>
+  </section>
+
+  <section id="viewFinal" style="display:none">
+    <div class="card">
+      <div>確定した利用明細CSVを取り込む：<input type="file" id="stmtFile" accept=".csv"></div>
+      <p class="muted">取り込むと、カードは自動で判別します。すでに取り込んだ月を見る：
+        <select id="finalKeySel"><option value="">選んでください</option></select>
+        <button id="btnLoadLines">表示</button></p>
+      <p id="intakeMsg"></p>
+    </div>
+    <div class="card" id="finalResult" style="display:none">
+      <div id="compareBox"></div>
+      <div class="sum" id="finalInfo"></div>
+      <table id="lineTable"><thead><tr>
+        <th>日付</th><th>利用先</th><th class="num">金額</th><th>科目</th><th>税区分</th><th>摘要</th><th>登録番号</th><th>状態</th>
+      </tr></thead><tbody></tbody></table>
+      <p><button class="act" id="btnFinalCsv">確定CSVを作る</button> <span id="finalCsvMsg"></span></p>
+      <p class="muted">CSVは弥生会計の仕訳日記帳「イオンポート」から取り込んでください。</p>
+    </div>
+  </section>
+</main>
+<script>
+var API = 'https://script.google.com/macros/s/AKfycbzDlZylUNNSnG0OCAYUF1jFJo6kNa4sdFB4bGxjfW4VWCfB3B_ZeUGzBy-c1Sn_K3nQ/exec';
+var state = { card: 'kannabe', mode: 'prov', kamokuList: [], taxList: [], months: [], curKey: '' };
+
+function callApi(payload) {
+  return fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(payload) })
+    .then(function (r) { return r.json(); })
+    .then(function (j) { if (!j.ok) throw new Error(j.error || 'エラー'); return j; });
+}
+function yen(n) { return Number(n || 0).toLocaleString('ja-JP') + '円'; }
+function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+function selOpts(list, cur, emptyLabel) {
+  var h = '<option value="">' + (emptyLabel || '―') + '</option>';
+  list.forEach(function (v) { h += '<option' + (v === cur ? ' selected' : '') + '>' + esc(v) + '</option>'; });
+  return h;
+}
+
+function renderCardTabs() {
+  var el = document.getElementById('cardTabs');
+  el.innerHTML = '';
+  state.cards.forEach(function (c) {
+    var b = document.createElement('button');
+    b.className = 'tab' + (state.card === c.key ? ' on' : '');
+    b.textContent = c.label;
+    b.onclick = function () { state.card = c.key; renderCardTabs(); refreshFinalKeys(); loadProv(); };
+    el.appendChild(b);
+  });
+}
+
+function setMode(m) {
+  state.mode = m;
+  document.querySelectorAll('#modeTabs .tab').forEach(function (t) { t.classList.toggle('on', t.dataset.mode === m); });
+  document.getElementById('viewProv').style.display = m === 'prov' ? '' : 'none';
+  document.getElementById('viewFinal').style.display = m === 'final' ? '' : 'none';
+}
+document.querySelectorAll('#modeTabs .tab').forEach(function (t) { t.onclick = function () { setMode(t.dataset.mode); }; });
+
+function provYmValue() { return document.getElementById('provYm').value.replace('-', ''); }
+
+function loadProv() {
+  callApi({ action: 'getProvisional', card: state.card, ym: provYmValue() }).then(function (j) {
+    if (j.rows && j.rows.length) showProvRows(j.rows);
+    else document.getElementById('provResult').style.display = 'none';
+  }).catch(function () {});
+}
+
+function showProvRows(rows) {
+  document.getElementById('provResult').style.display = '';
+  var tb = document.querySelector('#provTable tbody');
+  tb.innerHTML = '';
+  rows.forEach(function (r) {
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + esc(r.date) + '</td><td>' + esc(r.merchant) + '</td><td class="num">' + yen(r.amount) + '</td>' +
+      '<td><select data-f="kamoku">' + selOpts(state.kamokuList, r.kamoku, '未定') + '</select></td>' +
+      '<td><select data-f="tax">' + selOpts(state.taxList, r.tax) + '</select></td>' +
+      '<td><input type="checkbox" data-f="target"' + (r.target === '対象' ? ' checked' : '') + '></td>';
+    tr.querySelectorAll('select').forEach(function (s) {
+      s.onchange = function () { updateProv(r.rowNo, s.dataset.f, s.value); };
+    });
+    tr.querySelector('input[type=checkbox]').onchange = function (ev) {
+      updateProv(r.rowNo, 'target', ev.target.checked ? '対象' : '対象外');
+    };
+    tb.appendChild(tr);
+  });
+  updateProvSums(rows);
+}
+
+function updateProvSums(rows) {
+  var s = { shiire: 0, shomohin: 0, other: 0, undecided: 0 };
+  rows.forEach(function (r) {
+    if (r.target !== '対象') return;
+    if (!r.kamoku) s.undecided += r.amount;
+    else if (r.kamoku === '仕入高') s.shiire += r.amount;
+    else if (r.kamoku === '消耗品費') s.shomohin += r.amount;
+    else s.other += r.amount;
+  });
+  document.getElementById('provSums').innerHTML =
+    '仕入高：' + yen(s.shiire) + '／消耗品費：' + yen(s.shomohin) + '／その他：' + yen(s.other) +
+    (s.undecided ? '<br><span class="bad">科目が未定：' + yen(s.undecided) + '（先に振り分けてください）</span>' : '');
+}
+
+function updateProv(rowNo, field, value) {
+  var payload = { action: 'updateProvRow', card: state.card, ym: provYmValue(), rowNo: rowNo };
+  payload[field] = value;
+  callApi(payload).then(function () { loadProv(); }).catch(function (e) { alert(e.message); });
+}
+
+document.getElementById('btnPaste').onclick = function () {
+  var text = document.getElementById('pasteText').value;
+  var msg = document.getElementById('pasteMsg');
+  msg.textContent = '読み込み中…';
+  callApi({ action: 'pasteAnalyze', card: state.card, ym: provYmValue(), text: text }).then(function (j) {
+    msg.textContent = j.count + '件読み込みました';
+    showProvRows(j.rows);
+  }).catch(function (e) { msg.innerHTML = '<span class="bad">' + esc(e.message) + '</span>'; });
+};
+
+document.getElementById('btnProvCsv').onclick = function () {
+  var msg = document.getElementById('provCsvMsg');
+  msg.textContent = '作成中…';
+  callApi({ action: 'makeProvisionalCsv', card: state.card, ym: provYmValue() }).then(function (j) {
+    msg.innerHTML = '作成しました（' + j.rows + '行・合計' + yen(j.total) + '） <a class="btn" href="' + j.url + '" target="_blank">CSVを開く</a>';
+  }).catch(function (e) { msg.innerHTML = '<span class="bad">' + esc(e.message) + '</span>'; });
+};
+
+function refreshFinalKeys() {
+  var sel = document.getElementById('finalKeySel');
+  sel.innerHTML = '<option value="">選んでください</option>';
+  state.months.filter(function (m) { return m.kind === '確定' && m.card === state.card; }).forEach(function (m) {
+    var o = document.createElement('option');
+    o.value = m.key; o.textContent = '請求月 ' + m.ym + '（' + m.status + '）';
+    sel.appendChild(o);
+  });
+}
+
+document.getElementById('stmtFile').onchange = function (ev) {
+  var f = ev.target.files[0];
+  if (!f) return;
+  var msg = document.getElementById('intakeMsg');
+  msg.textContent = '取り込み中…';
+  var reader = new FileReader();
+  reader.onload = function () {
+    callApi({ action: 'intakeStatement', text: reader.result }).then(function (j) {
+      state.card = j.card; renderCardTabs();
+      msg.innerHTML = '取り込みました：' + j.count + '件・請求金額 ' + yen(j.billTotal) + '・支払日 ' + esc(j.payDate) +
+        (j.pending ? ' <span class="bad">要確認 ' + j.pending + '件</span>' : ' <span class="ok">要確認なし</span>');
+      state.curKey = j.key;
+      return callApi({ action: 'getState' });
+    }).then(function (s) {
+      state.months = s.months; refreshFinalKeys();
+      document.getElementById('finalKeySel').value = state.curKey;
+      loadLines(state.curKey);
+    }).catch(function (e) { msg.innerHTML = '<span class="bad">' + esc(e.message) + '</span>'; });
+  };
+  reader.readAsText(f, 'Shift_JIS');
+};
+
+document.getElementById('btnLoadLines').onclick = function () {
+  var k = document.getElementById('finalKeySel').value;
+  if (k) loadLines(k);
+};
+
+function loadLines(key) {
+  state.curKey = key;
+  callApi({ action: 'getLines', key: key }).then(function (j) { showLines(j); })
+    .catch(function (e) { alert(e.message); });
+}
+
+function showLines(j) {
+  document.getElementById('finalResult').style.display = '';
+  var m = j.month;
+  document.getElementById('finalInfo').innerHTML =
+    '請求金額：' + yen(m.billTotal) + '／支払日：' + esc(m.payDate) + '／状態：' + esc(m.status);
+  var cb = document.getElementById('compareBox');
+  if (j.provisional) {
+    var p = j.provisional;
+    function d(a, b) { var v = a - b; return (v > 0 ? '+' : '') + yen(v); }
+    cb.innerHTML = '<div class="warn">一時記帳との比べ：仕入高 ' + yen(p.shiire) + ' → 確定 ' + yen(m.shiire) + '（差 ' + d(m.shiire, p.shiire) + '）／' +
+      '消耗品費 ' + yen(p.shomohin) + ' → ' + yen(m.shomohin) + '（差 ' + d(m.shomohin, p.shomohin) + '）<br>' +
+      '☑ 弥生会計で、一時記帳の振伝（摘要「' + esc(String(p.ym).slice(4)) + '月末日」を含むもの）を削除してください</div>';
+  } else cb.innerHTML = '';
+  var tb = document.querySelector('#lineTable tbody');
+  tb.innerHTML = '';
+  j.lines.forEach(function (l) {
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + esc(l.date) + '</td><td>' + esc(l.merchant) + '</td><td class="num">' + yen(l.amount) + '</td>' +
+      '<td><select data-f="kamoku">' + selOpts(state.kamokuList, l.kamoku, '未定') + '</select></td>' +
+      '<td><select data-f="tax">' + selOpts(state.taxList, l.tax) + '</select></td>' +
+      '<td><input data-f="tekiyo" size="12" value="' + esc(l.tekiyo) + '"></td>' +
+      '<td><input data-f="regNo" size="10" value="' + esc(l.regNo) + '"></td>' +
+      '<td>' + (l.status === '要確認' ? '<span class="bad">要確認</span>' : esc(l.status)) +
+      ' <button data-x="1">対象外</button></td>';
+    tr.querySelectorAll('select, input').forEach(function (el) {
+      el.onchange = function () { updateLine(l.rowNo, el.dataset.f, el.value); };
+    });
+    tr.querySelector('button[data-x]').onclick = function () { updateLine(l.rowNo, 'status', '対象外'); };
+    tb.appendChild(tr);
+  });
+}
+
+function updateLine(rowNo, field, value) {
+  var payload = { action: 'updateLine', key: state.curKey, rowNo: rowNo };
+  payload[field] = value;
+  callApi(payload).then(function () { loadLines(state.curKey); }).catch(function (e) { alert(e.message); });
+}
+
+document.getElementById('btnFinalCsv').onclick = function () {
+  var msg = document.getElementById('finalCsvMsg');
+  msg.textContent = '作成中…';
+  callApi({ action: 'makeFinalCsv', key: state.curKey }).then(function (j) {
+    msg.innerHTML = '作成しました（' + j.rows + '行・請求金額 ' + yen(j.billTotal) + '） <a class="btn" href="' + j.url + '" target="_blank">CSVを開く</a>';
+    loadLines(state.curKey);
+  }).catch(function (e) { msg.innerHTML = '<span class="bad">' + esc(e.message) + '</span>'; });
+};
+
+(function init() {
+  var now = new Date();
+  var prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  document.getElementById('provYm').value = prev.getFullYear() + '-' + ('0' + (prev.getMonth() + 1)).slice(-2);
+  callApi({ action: 'getState' }).then(function (s) {
+    state.cards = s.cards; state.kamokuList = s.kamokuList; state.taxList = s.taxList; state.months = s.months;
+    var w = '';
+    if (!s.hojo.kannabe || !s.hojo.kinoshou) {
+      w = '<div class="warn">買掛金の補助科目が未設定のカードがあります。台帳「エクラン｜イオンカード仕訳台帳」の設定タブに、弥生の補助科目名を入れてください。</div>';
+    }
+    document.getElementById('hojoWarn').innerHTML = w;
+    renderCardTabs(); refreshFinalKeys(); loadProv();
+  }).catch(function (e) {
+    document.getElementById('hojoWarn').innerHTML = '<div class="warn">台帳に接続できませんでした。初期設定（setupIon）が済んでいるか確認してください。<br>' + esc(e.message) + '</div>';
+  });
+})();
+</script>
+</body>
+</html>
