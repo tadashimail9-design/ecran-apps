@@ -107,7 +107,9 @@ document.getElementById('fileInput').addEventListener('change', function (ev) {
   ev.target.value = '';
   if (!files.length || sending) return;
   sending = true;
-  document.getElementById('doneMsg').textContent = '';
+  var failCount = 0;
+  var doneMsg = document.getElementById('doneMsg');
+  doneMsg.textContent = '';
   var list = document.getElementById('list');
   var chain = Promise.resolve();
   files.forEach(function (f) {
@@ -124,6 +126,7 @@ document.getElementById('fileInput').addEventListener('change', function (ev) {
           st.innerHTML = '<span class="ok">受け付けました</span>';
         });
       }).catch(function (e) {
+        failCount++;
         var st2 = document.createElement('span');
         st2.innerHTML = '<span class="err">送れませんでした：' + String(e && e.message || e) + '</span>';
         row.appendChild(st2);
@@ -132,7 +135,11 @@ document.getElementById('fileInput').addEventListener('change', function (ev) {
   });
   chain.then(function () {
     sending = false;
-    document.getElementById('doneMsg').textContent = '受け付けました。読み取りは自動で進みます。このまま終わって大丈夫です。';
+    if (failCount === 0) {
+      doneMsg.textContent = '受け付けました。読み取りは自動で進みます。このまま終わって大丈夫です。';
+    } else {
+      doneMsg.innerHTML = '<span class="err">送れなかった写真があります。通信のよい場所でもう一度お試しください。</span>';
+    }
   });
 });
 </script>
