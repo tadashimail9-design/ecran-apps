@@ -29,6 +29,10 @@
   .stat b { font-size: 19px; }
   tr.stopped td { color: #aaa; }
   .rowbtns { white-space: nowrap; }
+  tr.hi td { background: #fdf0ec; }
+  tr.lo td { background: #eef4fb; }
+  .judge { font-weight: 700; }
+  .big { font-size: 22px; font-weight: 700; }
 </style>
 </head>
 <body>
@@ -54,6 +58,24 @@
         <a href="confirm.html?store=kannabe" target="_blank">神辺の確認ページ</a> ／
         <a href="confirm.html?store=kinoshou" target="_blank">木之庄の確認ページ</a>
       </div>
+    </div>
+
+    <h2>棚卸額のチェック</h2>
+    <div class="card">
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
+        <select id="healthStore"><option value="kannabe">神辺店</option><option value="kinoshou">木之庄店</option></select>
+        <button class="sub" id="healthReload">見る</button>
+        <span style="margin-left:auto;">設定棚卸額 <input id="targetInput" type="number" style="width:130px; text-align:right;"> 円
+        <button class="small" id="targetSave">設定を保存</button></span>
+      </div>
+      <div id="healthBox" class="msg">読み込み中…</div>
+      <div style="overflow-x:auto;">
+      <table id="healthTable">
+        <thead><tr><th>業者</th><th style="text-align:right;">今回</th><th style="text-align:right;">半年平均</th><th style="text-align:right;">平均と比べて</th><th style="text-align:right;">前年同月</th><th style="text-align:right;">前年と比べて</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      </div>
+      <div class="msg" style="color:#666; font-size:13px;">平均と比べて120%以上は多め、80%以下は少なめとして色を付けています。半年平均は直近6か月（ユビレジExcel＋このアプリの確定分）です。</div>
     </div>
 
     <h2>マスターを直す</h2>
@@ -100,7 +122,7 @@ function api(body) {
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 function ymStr() { return String(Math.floor(ym / 100)) + '年' + (ym % 100) + '月分'; }
 function ymCode() { return String(ym); }
-function shiftMonth(d) { var y = Math.floor(ym / 100), m = ym % 100 + d; if (m < 1) { y--; m = 12; } if (m > 12) { y++; m = 1; } ym = y * 100 + m; loadStatus(); }
+function shiftMonth(d) { var y = Math.floor(ym / 100), m = ym % 100 + d; if (m < 1) { y--; m = 12; } if (m > 12) { y++; m = 1; } ym = y * 100 + m; loadStatus(); loadHealth(); }
 document.getElementById('prevM').onclick = function () { shiftMonth(-1); };
 document.getElementById('nextM').onclick = function () { shiftMonth(1); };
 
@@ -216,7 +238,67 @@ document.getElementById('addBtn').onclick = function () {
     .catch(function (e) { document.getElementById('masterMsg').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; });
 };
 
-loadStatus(); loadMaster();
+function yen(n) { return (n == null ? '—' : Number(n).toLocaleString('ja-JP') + '円'); }
+function ratioTxt(r) { return (r == null ? '—' : r + '%'); }
+function judgeTarget(r) { if (r == null) return '—'; if (r > 110) return '設定より多め'; if (r < 90) return '設定より少なめ'; return '設定の範囲内'; }
+function judgeAvg(r) { if (r == null) return '—'; if (r > 110) return '平均より多め'; if (r < 90) return '平均より少なめ'; return '平均並み'; }
+
+function loadHealth() {
+  var store = document.getElementById('healthStore').value;
+  var box = document.getElementById('healthBox');
+  box.textContent = '読み込み中…';
+  api({ action: 'getAmountHealth', store: store, ym: ymCode() }).then(function (h) {
+    document.getElementById('targetInput').value = h.target || '';
+    var lines = [];
+    lines.push('<div><span class="big">' + ymStr() + 'の棚卸額（税抜） ' + yen(h.current.total) + '</span>' +
+      (h.current.review + h.current.drop > 0 ? '　（確認待ち ' + (h.current.review + h.current.drop) + '件は含みません）' : '') + '</div>');
+    lines.push('<div style="margin-top:6px;">設定額 ' + yen(h.target) + ' と比べて <span class="judge">' + ratioTxt(h.targetRatio) + '（' + judgeTarget(h.targetRatio) + '）</span>' +
+      '　／　半年平均 ' + yen(h.avg6.total) + ' と比べて <span class="judge">' + ratioTxt(h.avgRatio) + '（' + judgeAvg(h.avgRatio) + '）</span>' +
+      (h.yoy ? '　／　前年同月 ' + yen(h.yoy.total) + ' と比べて <span class="judge">' + ratioTxt(h.yoy.ratio) + '</span>' : '') + '</div>');
+    var c = h.calendar;
+    lines.push('<div style="margin-top:6px; color:#555;">今月の月末は' + c.monthEndWday + '曜日です。過去の月末が金・土・日の月の平均は ' + yen(c.weekendAvg) + '（' + c.weekendMonths + 'か月）、平日の月は ' + yen(c.weekdayAvg) + '（' + c.weekdayMonths + 'か月）でした。</div>');
+    if (h.current.total > 0) {
+      var hi = null, lo = null;
+      h.vendors.forEach(function (v) {
+        if (v.avgRatio == null || v.current === 0) return;
+        if (v.avgRatio >= 120 && (!hi || v.avgRatio > hi.avgRatio)) hi = v;
+        if (v.avgRatio <= 80 && (!lo || v.avgRatio < lo.avgRatio)) lo = v;
+      });
+      var adv = [];
+      if (hi) adv.push(hi.vendor + 'が半年平均の' + hi.avgRatio + '%と多めです');
+      if (lo) adv.push(lo.vendor + 'が半年平均の' + lo.avgRatio + '%と少なめです');
+      if (adv.length) lines.push('<div style="margin-top:6px;">気になるところ：' + adv.join('。') + '。</div>');
+    } else {
+      lines.push('<div style="margin-top:6px; color:#555;">この月はまだ読み取りがありません。基準（設定額・半年平均・前年同月）だけ先に確認できます。</div>');
+    }
+    box.innerHTML = lines.join('');
+    var tb = document.querySelector('#healthTable tbody');
+    tb.innerHTML = '';
+    h.vendors.forEach(function (v) {
+      var tr = document.createElement('tr');
+      if (v.avgRatio != null && v.current > 0 && v.avgRatio >= 120) tr.className = 'hi';
+      if (v.avgRatio != null && v.current > 0 && v.avgRatio <= 80) tr.className = 'lo';
+      tr.innerHTML = '<td>' + esc(v.vendor) + '</td>' +
+        '<td style="text-align:right;">' + yen(v.current) + '</td>' +
+        '<td style="text-align:right;">' + yen(v.avg6) + '</td>' +
+        '<td style="text-align:right;">' + ratioTxt(v.avgRatio) + '</td>' +
+        '<td style="text-align:right;">' + yen(v.yoy) + '</td>' +
+        '<td style="text-align:right;">' + ratioTxt(v.yoyRatio) + '</td>';
+      tb.appendChild(tr);
+    });
+  }).catch(function (e) { box.innerHTML = '<span class="err">' + esc(e.message) + '</span>'; });
+}
+document.getElementById('healthStore').onchange = loadHealth;
+document.getElementById('healthReload').onclick = loadHealth;
+document.getElementById('targetSave').onclick = function () {
+  var store = document.getElementById('healthStore').value;
+  var val = Number(document.getElementById('targetInput').value);
+  if (!(val > 0)) { alert('設定額を入れてください。'); return; }
+  api({ action: 'setTarget', store: store, value: val }).then(function () { loadHealth(); })
+    .catch(function (e) { alert(e.message); });
+};
+
+loadStatus(); loadMaster(); loadHealth();
 </script>
 </body>
 </html>
