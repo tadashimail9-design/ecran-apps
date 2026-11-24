@@ -33,14 +33,7 @@
 <body>
 <header>棚卸 管理画面</header>
 <main>
-  <div class="card" id="gate">
-    <div class="msg">管理コードを入れてください。</div>
-    <input type="password" id="codeInput" placeholder="管理コード" style="width:220px">
-    <button id="codeBtn">開く</button>
-    <div class="msg err" id="gateMsg"></div>
-  </div>
-
-  <div id="panel" style="display:none">
+  <div id="panel">
     <h2>月次締め</h2>
     <div class="card">
       <div style="margin-bottom:10px;">
@@ -110,17 +103,7 @@ function shiftMonth(d) { var y = Math.floor(ym / 100), m = ym % 100 + d; if (m <
 document.getElementById('prevM').onclick = function () { shiftMonth(-1); };
 document.getElementById('nextM').onclick = function () { shiftMonth(1); };
 
-document.getElementById('codeBtn').onclick = function () {
-  CODE = document.getElementById('codeInput').value.trim();
-  api({ action: 'checkAdmin' }).then(function () {
-    sessionStorage.setItem('invAdminCode', CODE);
-    document.getElementById('gate').style.display = 'none';
-    document.getElementById('panel').style.display = 'block';
-    loadStatus(); loadMaster();
-  }).catch(function (e) {
-    document.getElementById('gateMsg').textContent = '開けませんでした：' + e.message;
-  });
-};
+
 
 function statLine(name, s) {
   return '<div><b style="font-size:17px;">' + name + '</b>　' +
@@ -232,7 +215,7 @@ document.getElementById('addBtn').onclick = function () {
     .catch(function (e) { document.getElementById('masterMsg').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; });
 };
 
-if (CODE) document.getElementById('codeInput').value = CODE;
+loadStatus(); loadMaster();
 </script>
 </body>
 </html>
