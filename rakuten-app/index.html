@@ -63,15 +63,11 @@
 </div>
 
 <div class="bar">
-  <span>スマホでレシート撮影する:
-    <label for="receiptInput" style="display:inline-block; padding:9px 16px; background:#1a73e8; color:#fff; border-radius:6px; cursor:pointer; font-size:15px;">📷 カメラを起動</label>
-    <input type="file" id="receiptInput" accept="image/*" multiple style="display:none;">
+  <span>レシートの撮影は共通の入口から:
+    <a href="https://tadashimail9-design.github.io/ecran-apps/receipt/" target="_blank" rel="noopener" style="display:inline-block; padding:9px 16px; background:#205c40; color:#fff; border-radius:6px; font-size:15px; text-decoration:none;">レシート撮影を開く</a>
+    <span style="font-size:13px; color:#555;">（「クレジットカード」を選んで撮影するだけ。ここの判定で自動で拾います）</span>
   </span>
-  <span id="receiptMsg" style="font-size:13px;"></span>
 </div>
-
-
-<div style="font-size:12px; color:#666; margin:-6px 0 12px;">※ 送信が全部終わるまで、この画面は開いたままにしてください（結果は1枚ずつ下に出ます）</div>
 
 <div class="msg" id="msg"></div>
 
@@ -448,63 +444,6 @@ document.getElementById('fileInput').addEventListener('change', function (ev) {
     }).catch(function (e) { busy(false); setMsg(e.message, 'err'); });
   };
   reader.readAsDataURL(f);
-  ev.target.value = '';
-});
-
-var receiptQueue = [];
-var receiptBusy = false;
-var receiptCount = 0;
-
-function enqueueReceipt(file) {
-  receiptCount++;
-  var item = document.createElement('div');
-  item.textContent = 'レシート' + receiptCount + ': 送信待ち...';
-  var box = document.getElementById('receiptMsg');
-  box.insertBefore(item, box.firstChild);
-  receiptQueue.push({ file: file, item: item, n: receiptCount });
-  pumpReceiptQueue();
-}
-
-function pumpReceiptQueue() {
-  if (receiptBusy) return;
-  var job = receiptQueue.shift();
-  if (!job) return;
-  receiptBusy = true;
-  job.item.textContent = 'レシート' + job.n + ': 読み取り中...';
-  processReceiptFile(job.file).then(function (r) {
-    job.item.textContent = 'レシート' + job.n + ': ✓ ' + r.storeName + ' / ' + r.date + ' / ' + Number(r.total).toLocaleString() + '円' +
-      (r.regNo ? ' / 登録番号 ' + r.regNo : ' / 登録番号なし');
-    loadReceipts();
-  }).catch(function (e) {
-    job.item.textContent = 'レシート' + job.n + ': ✗ 読み取りできませんでした（' + e.message + '）';
-  }).then(function () {
-    receiptBusy = false;
-    pumpReceiptQueue();
-  });
-}
-
-function processReceiptFile(f) {
-  return new Promise(function (resolve, reject) {
-    var url = URL.createObjectURL(f);
-    var img = new Image();
-    img.onload = function () {
-      var scale = Math.min(1, 1200 / Math.max(img.width, img.height));
-      var cv = document.createElement('canvas');
-      cv.width = Math.round(img.width * scale);
-      cv.height = Math.round(img.height * scale);
-      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
-      URL.revokeObjectURL(url);
-      var b64 = cv.toDataURL('image/jpeg', 0.8).split(',')[1];
-      callApi('receipt', { base64: b64, mime: 'image/jpeg' }, 120000).then(function (res) { resolve(res.receipt); }).catch(reject);
-    };
-    img.onerror = function () { reject(new Error('画像を開けませんでした')); };
-    img.src = url;
-  });
-}
-
-document.getElementById('receiptInput').addEventListener('change', function (ev) {
-  var files = ev.target.files;
-  for (var i = 0; i < files.length; i++) enqueueReceipt(files[i]);
   ev.target.value = '';
 });
 
