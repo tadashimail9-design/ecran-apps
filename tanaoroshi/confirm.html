@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>棚卸 確認 | エクラン</title>
+<link rel="icon" href="../icon.png">
+<link rel="apple-touch-icon" href="../icon.png">
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; font-family: -apple-system, "Hiragino Sans", sans-serif; background: #f4f1ea; color: #222; }
+  header { background: #5a4632; color: #fff; padding: 14px 16px; }
+  header .t { font-size: 20px; font-weight: 700; }
+  header .s { font-size: 13px; opacity: .85; margin-top: 2px; }
+  main { padding: 14px 14px 40px; max-width: 760px; margin: 0 auto; }
+  .monthbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .monthbar button { font-size: 16px; padding: 8px 14px; border-radius: 10px; border: 1px solid #c9bda9; background: #fff; }
+  .monthbar .ym { font-size: 19px; font-weight: 700; flex: 1; text-align: center; }
+  .card { background: #fff; border-radius: 14px; padding: 14px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .vcard { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+  .vcard .v { font-size: 18px; font-weight: 700; flex: 1; }
+  .badge { font-size: 13px; padding: 5px 10px; border-radius: 999px; background: #eee; color: #555; white-space: nowrap; }
+  .badge.warn { background: #fde8e8; color: #a11; }
+  .badge.done { background: #dff3df; color: #256b25; }
+  .item { border-top: 1px solid #eee; padding: 12px 0; }
+  .item:first-child { border-top: none; }
+  .item .name { font-size: 17px; font-weight: 700; line-height: 1.4; }
+  .item .meta { font-size: 13px; color: #777; margin: 3px 0 8px; line-height: 1.5; }
+  .inputs { display: flex; gap: 10px; }
+  .inputs label { flex: 1; font-size: 13px; color: #555; }
+  .inputs input { width: 100%; font-size: 20px; padding: 10px; border: 1.5px solid #c9bda9; border-radius: 10px; margin-top: 4px; }
+  .dropbox { background: #fdf3e3; border-radius: 10px; padding: 10px; font-size: 15px; line-height: 1.5; }
+  .dropbox label { display: flex; gap: 8px; align-items: center; font-weight: 700; }
+  .dropbox input { width: 22px; height: 22px; }
+  .bigbtn { display: block; width: 100%; font-size: 19px; font-weight: 700; padding: 16px; border: none; border-radius: 14px; background: #5a4632; color: #fff; margin-top: 14px; cursor: pointer; }
+  .bigbtn.sub { background: #fff; color: #5a4632; border: 1.5px solid #5a4632; }
+  .bigbtn:disabled { opacity: .5; }
+  .msg { font-size: 16px; line-height: 1.6; padding: 12px 4px; white-space: pre-wrap; }
+  .err { color: #b3261e; }
+  .links { margin-top: 22px; text-align: center; }
+  .links a { color: #5a4632; font-size: 16px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="t">棚卸の確認</div>
+  <div class="s" id="storeName"></div>
+</header>
+<main>
+  <div id="listView">
+    <div class="monthbar">
+      <button id="prevM">◀ 前月</button>
+      <div class="ym" id="ymLabel"></div>
+      <button id="nextM">翌月 ▶</button>
+    </div>
+    <div class="msg" id="listMsg">読み込み中…</div>
+    <div id="vendorList"></div>
+    <div class="links"><a href="index.html" id="shotLink">撮影ページにもどる</a></div>
+  </div>
+
+  <div id="itemView" style="display:none">
+    <div class="msg" id="itemTitle"></div>
+    <div class="card" id="itemList"></div>
+    <button class="bigbtn" id="submitBtn">これで確定する</button>
+    <button class="bigbtn sub" id="backBtn">業者一覧にもどる</button>
+    <div class="msg" id="itemMsg"></div>
+  </div>
+</main>
+<script>
+var EXEC_URL = 'https://script.google.com/macros/s/AKfycbzUSSRnDGATrsbjzsiG8hEH20wiD2HzKtlN2CUwOMYEtDUsUadd0Hl3q1Daxrq14ZKSng/exec';
+var qs = new URLSearchParams(location.search);
+var STORE = qs.get('store') === 'kinoshou' ? 'kinoshou' : 'kannabe';
+var STORE_NAME = STORE === 'kinoshou' ? '喫茶グリル エクラン 木之庄店' : 'カフェ エクラン 神辺店';
+document.getElementById('storeName').textContent = STORE_NAME;
+document.getElementById('shotLink').href = 'index.html?store=' + STORE;
+if (qs.get('vendor')) { /* LINEボタンから来た場合はその業者を直接開く */ }
+
+var now = new Date();
+var ym = now.getFullYear() * 100 + (now.getMonth() + 1);
+if (qs.get('ym') && /^\d{6}$/.test(qs.get('ym'))) ym = Number(qs.get('ym'));
+var curVendor = null, curItems = [];
+
+function ymStr() { return String(Math.floor(ym / 100)) + '年' + (ym % 100) + '月'; }
+function ymCode() { return String(ym); }
+function shiftMonth(d) { var y = Math.floor(ym / 100), m = ym % 100 + d; if (m < 1) { y--; m = 12; } if (m > 12) { y++; m = 1; } ym = y * 100 + m; loadList(); }
+document.getElementById('prevM').onclick = function () { shiftMonth(-1); };
+document.getElementById('nextM').onclick = function () { shiftMonth(1); };
+
+function api(body) {
+  return fetch(EXEC_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body) })
+    .then(function (r) { return r.json(); })
+    .then(function (j) { if (!j.ok) throw new Error(j.error || 'エラー'); return j; });
+}
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+function loadList() {
+  document.getElementById('ymLabel').textContent = ymStr() + '分';
+  var msg = document.getElementById('listMsg'), list = document.getElementById('vendorList');
+  msg.textContent = '読み込み中…'; list.innerHTML = '';
+  api({ action: 'getReviewSummary', store: STORE, ym: ymCode() })
+    .then(function (r) {
+      if (!r.vendors.length) { msg.textContent = 'まだ読み取りが始まっていません。先に撮影ページで写真を送ってください。'; return; }
+      msg.textContent = '確認が要る業者を選んでください。';
+      r.vendors.forEach(function (v) {
+        var need = v.review + v.drop;
+        var badge = need > 0 ? '<span class="badge warn">確認 ' + need + '件</span>' : '<span class="badge done">確認ずみ</span>';
+        var div = document.createElement('div');
+        div.className = 'card vcard';
+        div.innerHTML = '<div class="v">' + esc(v.vendor) + '</div>' + badge;
+        if (need > 0) div.onclick = function () { openVendor(v.vendor); };
+        list.appendChild(div);
+      });
+      var want = qs.get('vendor');
+      if (want) { var hit = r.vendors.filter(function (v) { return v.vendor === want && (v.review + v.drop) > 0; }); if (hit.length) openVendor(want); }
+    })
+    .catch(function (e) { msg.innerHTML = '<span class="err">読み込めませんでした：' + esc(e.message) + '</span>'; });
+}
+
+function openVendor(vendor) {
+  curVendor = vendor;
+  var msg = document.getElementById('itemMsg'); msg.textContent = '';
+  document.getElementById('itemTitle').textContent = vendor + '：数字が合っているか見てください。違うところは直して、最後に「これで確定する」を押してください。';
+  api({ action: 'getReview', store: STORE, ym: ymCode(), vendor: vendor })
+    .then(function (r) {
+      curItems = r.items;
+      var box = document.getElementById('itemList');
+      box.innerHTML = '';
+      if (!r.items.length) { box.innerHTML = '<div class="msg">確認が要る品目はありません。</div>'; }
+      r.items.forEach(function (it, i) {
+        var div = document.createElement('div');
+        div.className = 'item';
+        var meta = [];
+        if (it.prevQty !== null) meta.push('前月：数量 ' + it.prevQty + (it.prevFrac !== null ? '・端数 ' + it.prevFrac : ''));
+        if (it.qty === null && it.frac === null && it.status !== '削除候補') meta.push('空欄でした（まだ数えていない？）');
+        if (it.status === '削除候補') {
+          div.innerHTML = '<div class="name">' + esc(it.name) + '</div>' +
+            '<div class="meta">商品名に二重線が引かれていました</div>' +
+            '<div class="dropbox"><label><input type="checkbox" id="drop' + i + '" checked> もう使っていない（棚卸から外す）</label>' +
+            '<div style="font-weight:400; font-size:13px; margin-top:6px;">外さない場合はチェックを外して、数量を入れてください。</div></div>' +
+            '<div class="inputs" style="margin-top:8px;"><label>数量（' + esc(it.unit1 || '個') + '）<input type="number" inputmode="decimal" id="qty' + i + '" value="' + (it.qty === null ? '' : it.qty) + '"></label>' +
+            '<label>端数（' + esc(it.unit2 || '') + '）<input type="number" inputmode="decimal" id="frac' + i + '" value="' + (it.frac === null ? '' : it.frac) + '"></label></div>';
+        } else {
+          div.innerHTML = '<div class="name">' + esc(it.name) + '</div>' +
+            (meta.length ? '<div class="meta">' + esc(meta.join(' ／ ')) + '</div>' : '') +
+            '<div class="inputs"><label>数量（' + esc(it.unit1 || '個') + '）<input type="number" inputmode="decimal" id="qty' + i + '" value="' + (it.qty === null ? '' : it.qty) + '"></label>' +
+            '<label>端数（' + esc(it.unit2 || '') + '）<input type="number" inputmode="decimal" id="frac' + i + '" value="' + (it.frac === null ? '' : it.frac) + '"></label></div>';
+        }
+        box.appendChild(div);
+      });
+      document.getElementById('listView').style.display = 'none';
+      document.getElementById('itemView').style.display = 'block';
+      window.scrollTo(0, 0);
+    })
+    .catch(function (e) { document.getElementById('listMsg').innerHTML = '<span class="err">' + esc(e.message) + '</span>'; });
+}
+
+document.getElementById('backBtn').onclick = function () {
+  document.getElementById('itemView').style.display = 'none';
+  document.getElementById('listView').style.display = 'block';
+  loadList();
+};
+document.getElementById('submitBtn').onclick = function () {
+  var btn = this, msg = document.getElementById('itemMsg');
+  var items = curItems.map(function (it, i) {
+    var dropEl = document.getElementById('drop' + i);
+    return { name: it.name, drop: !!(dropEl && dropEl.checked),
+      qty: document.getElementById('qty' + i).value, frac: document.getElementById('frac' + i).value };
+  });
+  btn.disabled = true; msg.textContent = '送っています…';
+  api({ action: 'submitConfirm', store: STORE, ym: ymCode(), vendor: curVendor, items: items, by: STORE_NAME })
+    .then(function (r) {
+      if (r.remaining > 0) { msg.textContent = '確定しました。まだ ' + r.remaining + ' 件残っています。'; }
+      else {
+        msg.textContent = '全部確定しました。ありがとうございました。';
+        setTimeout(function () { document.getElementById('backBtn').click(); }, 900);
+      }
+      btn.disabled = false;
+    })
+    .catch(function (e) { msg.innerHTML = '<span class="err">送れませんでした：' + esc(e.message) + '</span>'; btn.disabled = false; });
+};
+
+loadList();
+</script>
+</body>
+</html>
