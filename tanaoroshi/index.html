@@ -156,12 +156,8 @@ document.getElementById('sendBtn').onclick = function () {
   var b64 = photoData.split(',')[1];
   api({ action: 'uploadPhoto', ym: ymCode(), store: STORE, vendor: cur.vendor, page: cur.page, image: b64 })
     .then(function (up) {
-      msg.textContent = '読み取っています…（少し待ちます）';
-      return api({ action: 'readPage', pageId: up.pageId });
-    })
-    .then(function (r) {
       stopCam();
-      msg.textContent = '読み取りました。' + (r.review > 0 ? '確認が要る品目が ' + r.review + ' 件あります。確認ページで見てください。' : '確認が要る品目は ありませんでした。');
+      msg.textContent = '受け付けました。読み取りは自動で進みます。このまま次のページへどうぞ。';
       btn.style.display = 'none';
       document.getElementById('retakeBtn').style.display = 'none';
     })
