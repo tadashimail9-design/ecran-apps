@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>棚卸 撮影 | エクラン</title>
+<link rel="icon" href="../icon.png">
+<link rel="apple-touch-icon" href="../icon.png">
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; font-family: -apple-system, "Hiragino Sans", sans-serif; background: #f4f1ea; color: #222; }
+  header { background: #5a4632; color: #fff; padding: 14px 16px; }
+  header .t { font-size: 20px; font-weight: 700; }
+  header .s { font-size: 13px; opacity: .85; margin-top: 2px; }
+  main { padding: 14px 14px 40px; max-width: 760px; margin: 0 auto; }
+  .monthbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .monthbar button { font-size: 16px; padding: 8px 14px; border-radius: 10px; border: 1px solid #c9bda9; background: #fff; }
+  .monthbar .ym { font-size: 19px; font-weight: 700; flex: 1; text-align: center; }
+  .card { background: #fff; border-radius: 14px; padding: 14px; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.08); cursor: pointer; }
+  .card .v { font-size: 18px; font-weight: 700; flex: 1; }
+  .card .v small { display: block; font-size: 13px; font-weight: 400; color: #777; margin-top: 2px; }
+  .badge { font-size: 13px; padding: 5px 10px; border-radius: 999px; background: #eee; color: #555; white-space: nowrap; }
+  .badge.shot { background: #fdeec9; color: #7a5b00; }
+  .badge.done { background: #dff3df; color: #256b25; }
+  #camView { display: none; }
+  video, canvas.prev { width: 100%; border-radius: 12px; background: #000; }
+  .bigbtn { display: block; width: 100%; font-size: 19px; font-weight: 700; padding: 16px; border: none; border-radius: 14px; background: #5a4632; color: #fff; margin-top: 12px; cursor: pointer; }
+  .bigbtn.sub { background: #fff; color: #5a4632; border: 1.5px solid #5a4632; }
+  .bigbtn:disabled { opacity: .5; }
+  .msg { font-size: 16px; line-height: 1.6; padding: 12px 4px; white-space: pre-wrap; }
+  .err { color: #b3261e; }
+  .links { margin-top: 22px; text-align: center; }
+  .links a { color: #5a4632; font-size: 16px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="t">棚卸表の撮影</div>
+  <div class="s" id="storeName"></div>
+</header>
+<main>
+  <div id="listView">
+    <div class="monthbar">
+      <button id="prevM">◀ 前月</button>
+      <div class="ym" id="ymLabel"></div>
+      <button id="nextM">翌月 ▶</button>
+    </div>
+    <div class="msg" id="listMsg">読み込み中…</div>
+    <div id="pageList"></div>
+    <div class="links"><a href="confirm.html" id="confirmLink">確認ページを開く（直すところがある時）</a></div>
+  </div>
+
+  <div id="camView">
+    <div class="msg" id="camTitle"></div>
+    <video id="video" playsinline autoplay muted></video>
+    <canvas id="canvas" style="display:none"></canvas>
+    <img id="preview" class="prev" style="display:none; width:100%; border-radius:12px;">
+    <button class="bigbtn" id="shotBtn">📷 撮る</button>
+    <button class="bigbtn" id="sendBtn" style="display:none">送って読み取る</button>
+    <button class="bigbtn sub" id="retakeBtn" style="display:none">撮り直す</button>
+    <button class="bigbtn sub" id="backBtn">一覧にもどる</button>
+    <div class="msg" id="camMsg"></div>
+  </div>
+</main>
+<script>
+var EXEC_URL = 'https://script.google.com/macros/s/AKfycbzUSSRnDGATrsbjzsiG8hEH20wiD2HzKtlN2CUwOMYEtDUsUadd0Hl3q1Daxrq14ZKSng/exec';
+var qs = new URLSearchParams(location.search);
+var STORE = qs.get('store') === 'kinoshou' ? 'kinoshou' : 'kannabe';
+var STORE_NAME = STORE === 'kinoshou' ? '喫茶グリル エクラン 木之庄店' : 'カフェ エクラン 神辺店';
+document.getElementById('storeName').textContent = STORE_NAME;
+document.getElementById('confirmLink').href = 'confirm.html?store=' + STORE;
+
+var now = new Date();
+var ym = now.getFullYear() * 100 + (now.getMonth() + 1);
+var cur = null, stream = null, photoData = null;
+
+function ymStr() { return String(Math.floor(ym / 100)) + '年' + (ym % 100) + '月'; }
+function ymCode() { return String(ym); }
+function shiftMonth(d) { var y = Math.floor(ym / 100), m = ym % 100 + d; if (m < 1) { y--; m = 12; } if (m > 12) { y++; m = 1; } ym = y * 100 + m; loadList(); }
+document.getElementById('prevM').onclick = function () { shiftMonth(-1); };
+document.getElementById('nextM').onclick = function () { shiftMonth(1); };
+
+function api(body) {
+  return fetch(EXEC_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body) })
+    .then(function (r) { return r.json(); })
+    .then(function (j) { if (!j.ok) throw new Error(j.error || 'エラー'); return j; });
+}
+
+function loadList() {
+  document.getElementById('ymLabel').textContent = ymStr() + '分';
+  var msg = document.getElementById('listMsg'), list = document.getElementById('pageList');
+  msg.textContent = '読み込み中…'; list.innerHTML = '';
+  Promise.all([api({ action: 'getPages', store: STORE, ym: ymCode() }), api({ action: 'getReadStatus', store: STORE, ym: ymCode() })])
+    .then(function (rs) {
+      var pages = rs[0].pages, st = rs[1].status || {};
+      msg.textContent = pages.length ? '撮るページを選んでください。' : 'ページがありません。';
+      pages.forEach(function (p) {
+        var pid = p.pageId;
+        var s = st[pid];
+        var badge = !s ? '<span class="badge">まだ</span>' : (s === '読取済' ? '<span class="badge done">読取済み</span>' : '<span class="badge shot">撮影済み</span>');
+        var div = document.createElement('div');
+        div.className = 'card';
+        div.innerHTML = '<div class="v">' + p.vendor + ' <small>' + p.pages + 'ページ中の' + p.page + 'ページ目 ／ ' + p.count + '品目</small></div>' + badge;
+        div.onclick = function () { openCam(p); };
+        list.appendChild(div);
+      });
+    })
+    .catch(function (e) { msg.innerHTML = '<span class="err">読み込めませんでした：' + e.message + '</span>'; });
+}
+function openCam(p) {
+  cur = p; photoData = null;
+  document.getElementById('listView').style.display = 'none';
+  document.getElementById('camView').style.display = 'block';
+  document.getElementById('camTitle').textContent = p.vendor + '（' + p.pages + 'ページ中の' + p.page + 'ページ目）を撮ってください。ページ全体が入るように。';
+  document.getElementById('camMsg').textContent = '';
+  document.getElementById('preview').style.display = 'none';
+  document.getElementById('sendBtn').style.display = 'none';
+  document.getElementById('retakeBtn').style.display = 'none';
+  document.getElementById('shotBtn').style.display = 'block';
+  var video = document.getElementById('video');
+  video.style.display = 'block';
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    document.getElementById('camMsg').innerHTML = '<span class="err">この端末ではカメラが使えません</span>'; return;
+  }
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+    .then(function (s) { stream = s; video.srcObject = s; })
+    .catch(function (e) { document.getElementById('camMsg').innerHTML = '<span class="err">カメラを起動できませんでした：' + e.message + '</span>'; });
+}
+function stopCam() { if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; } }
+
+document.getElementById('shotBtn').onclick = function () {
+  var video = document.getElementById('video'), canvas = document.getElementById('canvas');
+  var w = video.videoWidth, h = video.videoHeight;
+  if (!w) return;
+  var scale = Math.min(1, 2000 / Math.max(w, h));
+  canvas.width = Math.round(w * scale); canvas.height = Math.round(h * scale);
+  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+  photoData = canvas.toDataURL('image/jpeg', 0.85);
+  var prev = document.getElementById('preview');
+  prev.src = photoData; prev.style.display = 'block';
+  video.style.display = 'none';
+  document.getElementById('shotBtn').style.display = 'none';
+  document.getElementById('sendBtn').style.display = 'block';
+  document.getElementById('retakeBtn').style.display = 'block';
+};
+document.getElementById('retakeBtn').onclick = function () { openCam(cur); };
+document.getElementById('backBtn').onclick = function () {
+  stopCam();
+  document.getElementById('camView').style.display = 'none';
+  document.getElementById('listView').style.display = 'block';
+  loadList();
+};
+document.getElementById('sendBtn').onclick = function () {
+  var btn = this, msg = document.getElementById('camMsg');
+  btn.disabled = true; msg.textContent = '送っています…';
+  var b64 = photoData.split(',')[1];
+  api({ action: 'uploadPhoto', ym: ymCode(), store: STORE, vendor: cur.vendor, page: cur.page, image: b64 })
+    .then(function (up) {
+      msg.textContent = '読み取っています…（少し待ちます）';
+      return api({ action: 'readPage', pageId: up.pageId });
+    })
+    .then(function (r) {
+      stopCam();
+      msg.textContent = '読み取りました。' + (r.review > 0 ? '確認が要る品目が ' + r.review + ' 件あります。確認ページで見てください。' : '確認が要る品目は ありませんでした。');
+      btn.style.display = 'none';
+      document.getElementById('retakeBtn').style.display = 'none';
+    })
+    .catch(function (e) { msg.innerHTML = '<span class="err">うまくいきませんでした：' + e.message + '</span>'; btn.disabled = false; });
+};
+
+loadList();
+</script>
+</body>
+</html>
