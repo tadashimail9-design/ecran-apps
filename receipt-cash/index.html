@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>経費レシート（現金）</title>
+<meta name="theme-color" content="#0f765c">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="経費レシート">
+<link rel="apple-touch-icon" sizes="180x180" href="icon.png">
+<link rel="icon" type="image/png" href="icon.png">
+<style>
+:root{font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;color:#182f2d;background:#edf4f2}*{box-sizing:border-box}body{margin:0;padding:12px}.wrap{max-width:520px;margin:auto}header{padding:14px 4px 18px}h1{font-size:21px;margin:0 0 5px}.sub{font-size:13px;color:#57716c}.card{background:#fff;border-radius:15px;padding:16px;margin-bottom:12px;box-shadow:0 4px 18px #16332c12}.label{font-size:13px;font-weight:700;margin:14px 0 6px;display:block}select,input[type=month],input[type=date],input[type=number]{width:100%;padding:12px;border:1px solid #b9cdc7;border-radius:10px;background:white;font-size:16px}.selects{display:grid;grid-template-columns:1fr 1fr;gap:10px}.selects .span{grid-column:1/-1}.hint{font-size:12px;color:#58746c;margin-top:8px}button{width:100%;border:0;border-radius:11px;padding:14px;font-size:16px;font-weight:bold;background:#0f765c;color:#fff;cursor:pointer}button:disabled{opacity:.45}.secondary{background:#e6efec;color:#165e4b}.message{font-size:14px;white-space:pre-wrap;color:#215447}.error{color:#b32727}.bar{height:7px;background:#dbece5;border-radius:999px;overflow:hidden}.bar i{display:block;height:100%;width:0;background:#159a73;transition:width .2s}
+#camWrap{background:#10312a;border-radius:13px;overflow:hidden}video{width:100%;display:block;background:#10312a}.shutter{margin-top:10px;background:#c2410c}.trayItem{border:1px solid #ddeae5;border-radius:12px;padding:10px;margin-top:10px}.trayItem img{width:100%;max-height:190px;object-fit:contain;background:#f5fbf7;border:1px solid #ddeae5;border-radius:10px}.trayItem .row3{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}.trayItem .row3 .span{grid-column:1/-1}.trayItem .acts{display:flex;gap:8px;margin-top:10px}.trayItem .acts button{padding:10px;font-size:14px}.st{font-size:13px;font-weight:700;margin-top:8px}.st.ok{color:#0f765c}.st.ng{color:#b32727}.footer{margin:22px 0;font-size:12px;color:#637972;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header><h1>☕ エクラン 経費レシート（現金）</h1><div class="sub">何枚も続けて撮って、あとから1枚ずつ科目を決めて登録できます</div></header>
+
+<div class="card">
+  <div class="selects">
+    <div class="span"><label class="label" for="dDept">使用部門（撮影する写真の初期値）</label><select id="dDept"><option value="事務所">事務所</option><option value="カフェエクラン神辺店">神辺店</option><option value="喫茶エクラン木之庄町店">木之庄店</option></select></div>
+    <div><label class="label" for="dPurpose">勘定科目</label><select id="dPurpose"><option>AIにおまかせ</option><option>福利厚生費</option><option>仕入高</option><option>消耗品費</option><option>研修教育費</option><option>会議費</option><option>交際費</option><option>修繕費</option><option>旅費交通費</option><option>新聞図書費</option><option>諸会費</option><option>車両費</option><option>雑費</option><option>租税公課</option><option>水道代</option></select></div>
+    <div><label class="label" for="dPayment">支払方法</label><select id="dPayment"><option value="社長立替">社長立替</option><option value="エブリカマネー">エブリカマネー</option><option value="その他">その他・確認</option></select></div>
+  </div>
+  <p class="hint">上の設定は、次に撮る写真の初期値になります。撮ったあとで、写真ごとに変えることもできます。</p>
+  <div id="camWrap" style="margin-top:12px"><video id="cam" autoplay playsinline muted></video></div>
+  <button class="shutter" id="shootBtn">📷 撮影する</button>
+  <p class="hint" id="camMsg">カメラの許可を求められたら「許可」を押してください。撮るたびに下へ溜まっていきます。</p>
+  <label class="hint" style="display:block;margin-top:10px">カメラが使えないときは：<input id="files" type="file" accept="image/*" multiple></label>
+  <div class="bar" style="margin-top:12px"><i id="progress"></i></div>
+  <p id="bulkMsg" class="message"></p>
+  <button id="registerAll" style="margin-top:8px" disabled>溜まった写真を全部登録する</button>
+  <div id="tray"></div>
+</div>
+
+<div class="card"><label class="label">月次の確認</label><input id="month" type="month"><button class="secondary" id="check" style="margin-top:10px">登録・確認状況を見る</button><p id="status" class="message"></p><div id="statusItems"></div><button class="secondary" id="extraCsv" style="margin-top:10px">追加CSVを作成（締め済みの月）</button><p class="hint">締めが終わった月に、あとから届いて確定したレシートがある場合、その分だけの追加CSVを作ります。</p><p id="extraResult" class="message"></p></div>
+
+<div class="card"><label class="label">要確認レシート（その他の科目）</label><p class="hint">基本の科目回答はLINEで行えます。その他の勘定科目を選ぶ場合だけ、こちらを使います。</p><button class="secondary" id="loadReviews">今月度の要確認を表示</button><div id="reviews"></div></div>
+
+<div class="footer">提出完了の報告と弥生会計の取込完了は、事務AI自動化グループLINEから操作します。</div>
+</div>
+<script>
+'use strict';
+var GAS_URL='https://script.google.com/macros/s/AKfycbzHCqEvjUTLM5c8BwpjIDKb1D7xpC9CnQbIYBtBc_sUYuuq5OBNA-sxY9wwkDULA6xf5A/exec';
+var $=function(id){return document.getElementById(id);};
+var ACCTS=['福利厚生費','研修教育費','広告宣伝費','会議費','消耗品費','交際費','修繕費','旅費交通費','通信費','新聞図書費','外注費','諸会費','車両費','雑費','仕入高','預け金','租税公課','水道代'];
+var PURPOSES=['AIにおまかせ','福利厚生費','仕入高','消耗品費','研修教育費','会議費','交際費','修繕費','旅費交通費','新聞図書費','諸会費','車両費','雑費','租税公課','水道代'];
+function api(body){return fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(body)}).then(function(r){return r.json();}).then(function(j){if(!j.ok)throw new Error(j.error||'エラー');return j.result;});}
+
+/* ===== まとめて撮影 ===== */
+var items=[];var seq=0;
+var stream=null;
+function startCam(){
+  if(stream)return;
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){$('camMsg').textContent='この端末ではカメラが使えません。下の「写真を選ぶ」から登録してください。';return;}
+  navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false}).then(function(s){
+    stream=s;$('cam').srcObject=s;
+  }).catch(function(e){$('camMsg').textContent='カメラを起動できませんでした：'+(e&&e.message||e)+'。下の「写真を選ぶ」からも登録できます。';});
+}
+startCam();
+
+function pushItem(dataUrl,b64){
+  var it={id:++seq,dataUrl:dataUrl,b64:b64,dept:$('dDept').value,purpose:$('dPurpose').value,payment:$('dPayment').value,state:'wait',msg:''};
+  items.push(it);renderItem(it);updateBulk();
+}
+function canvasShot(source,sw,sh){
+  var max=1800,scale=Math.min(1,max/Math.max(sw,sh));
+  var c=document.createElement('canvas');c.width=Math.floor(sw*scale);c.height=Math.floor(sh*scale);
+  var ctx=c.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(source,0,0,c.width,c.height);
+  return c.toDataURL('image/jpeg',.85);
+}
+$('shootBtn').addEventListener('click',function(){
+  var v=$('cam');
+  if(!stream||!v.videoWidth){$('camMsg').textContent='カメラの準備ができていません。少し待つか、下の「写真を選ぶ」を使ってください。';return;}
+  var url=canvasShot(v,v.videoWidth,v.videoHeight);
+  pushItem(url,url.split(',')[1]);
+  $('camMsg').textContent='撮影しました（'+items.filter(function(x){return x.state==='wait';}).length+'枚が登録待ちです）。続けて撮れます。';
+});
+$('files').addEventListener('change',function(){
+  var files=[].slice.call($('files').files||[]);$('files').value='';
+  var chain=Promise.resolve();
+  files.forEach(function(f){
+    chain=chain.then(function(){return new Promise(function(resolve){
+      var img=new Image();
+      img.onload=function(){var url=canvasShot(img,img.naturalWidth,img.naturalHeight);pushItem(url,url.split(',')[1]);resolve();};
+      img.onerror=function(){resolve();};
+      img.src=URL.createObjectURL(f);
+    });});
+  });
+});
+function mkSelect(options,value){
+  var s=document.createElement('select');
+  options.forEach(function(o){var op=document.createElement('option');op.value=o;op.textContent=o;op.selected=o===value;s.append(op);});
+  return s;
+}
+function renderItem(it){
+  var div=document.createElement('div');div.className='trayItem';div.id='tray'+it.id;
+  var img=document.createElement('img');img.src=it.dataUrl;div.append(img);
+  var row=document.createElement('div');row.className='row3';
+  var w1=document.createElement('div');w1.className='span';var l1=document.createElement('label');l1.className='label';l1.textContent='使用部門';w1.append(l1);
+  var sDept=mkSelect(['事務所','カフェエクラン神辺店','喫茶エクラン木之庄町店'],it.dept);sDept.addEventListener('change',function(){it.dept=sDept.value;});w1.append(sDept);row.append(w1);
+  var w2=document.createElement('div');var l2=document.createElement('label');l2.className='label';l2.textContent='勘定科目';w2.append(l2);
+  var sPur=mkSelect(PURPOSES,it.purpose);sPur.addEventListener('change',function(){it.purpose=sPur.value;});w2.append(sPur);row.append(w2);
+  var w3=document.createElement('div');var l3=document.createElement('label');l3.className='label';l3.textContent='支払方法';w3.append(l3);
+  var sPay=mkSelect(['社長立替','エブリカマネー','その他'],it.payment);sPay.addEventListener('change',function(){it.payment=sPay.value;});w3.append(sPay);row.append(w3);
+  div.append(row);
+  var st=document.createElement('div');st.className='st';st.textContent='登録待ち';div.append(st);
+  var acts=document.createElement('div');acts.className='acts';
+  var reg=document.createElement('button');reg.textContent='この1枚を登録';
+  var del=document.createElement('button');del.className='secondary';del.textContent='やめる';
+  acts.append(reg);acts.append(del);div.append(acts);
+  it.el={div:div,st:st,reg:reg,del:del,sDept:sDept,sPur:sPur,sPay:sPay};
+  reg.addEventListener('click',function(){registerOne(it);});
+  del.addEventListener('click',function(){items=items.filter(function(x){return x!==it;});div.remove();updateBulk();});
+  $('tray').append(div);
+}
+function setState(it,state,msg){
+  it.state=state;it.msg=msg||'';
+  var st=it.el.st;
+  if(state==='wait'){st.className='st';st.textContent='登録待ち';}
+  if(state==='doing'){st.className='st';st.textContent='登録しています…';}
+  if(state==='done'){st.className='st ok';st.textContent='✓ 登録しました（AIが読み取ります）';it.el.reg.disabled=true;it.el.del.disabled=true;[it.el.sDept,it.el.sPur,it.el.sPay].forEach(function(s){s.disabled=true;});}
+  if(state==='dup'){st.className='st ok';st.textContent='同じ写真が登録済みでした（二重登録を防ぎました）';it.el.reg.disabled=true;it.el.del.disabled=true;}
+  if(state==='fail'){st.className='st ng';st.textContent='登録できませんでした：'+it.msg;}
+  updateBulk();
+}
+function registerOne(it){
+  if(it.state==='doing'||it.state==='done'||it.state==='dup')return Promise.resolve();
+  setState(it,'doing');
+  return api({action:'saveReceipt',input:{password:'',filename:'receipt-'+it.id+'.jpg',mimeType:'image/jpeg',base64:it.b64,department:it.dept,purpose:it.purpose,payment:it.payment}}).then(function(r){
+    if(r&&r.ok)setState(it,'done');
+    else if(r&&r.duplicate)setState(it,'dup');
+    else setState(it,'fail',(r&&r.message)||'不明な応答');
+  }).catch(function(e){setState(it,'fail',e.message||String(e));});
+}
+function updateBulk(){
+  var n=items.filter(function(x){return x.state==='wait'||x.state==='fail';}).length;
+  $('registerAll').disabled=!n;
+  $('registerAll').textContent=n?('溜まった写真を全部登録する（'+n+'枚）'):'溜まった写真を全部登録する';
+}
+$('registerAll').addEventListener('click',function(){
+  var targets=items.filter(function(x){return x.state==='wait'||x.state==='fail';});
+  if(!targets.length)return;
+  $('registerAll').disabled=true;
+  var chain=Promise.resolve();var done=0;
+  targets.forEach(function(it){
+    chain=chain.then(function(){return registerOne(it).then(function(){done++;$('progress').style.width=(done/targets.length*100)+'%';$('bulkMsg').textContent='登録 '+done+'/'+targets.length+'枚';});});
+  });
+  chain.then(function(){
+    var ok=targets.filter(function(x){return x.state==='done'||x.state==='dup';}).length;
+    $('bulkMsg').textContent='登録が終わりました：'+ok+'/'+targets.length+'枚を受け付けました。AIが順次読み取ります。';
+    updateBulk();
+  });
+});
+</script>
+<script>
+'use strict';
+/* ===== 月次の確認・要確認（経費レシート本体と同じ機能） ===== */
+$('check').addEventListener('click',function(){
+  api({action:'getMonthStatus',month:$('month').value}).then(function(r){
+    $('status').textContent=r.month+'／全'+r.all+'件・確定'+r.ready+'件・要確認'+r.review+'件・処理中'+r.pending+'件\n提出状況：'+(r.submitted?'提出完了':'未完了')+(r.csvUrl?'\nCSV完成：'+r.csvUrl:'');
+    var box=$('statusItems');box.replaceChildren();
+    (r.items||[]).forEach(function(it){
+      var div=document.createElement('div');div.style.cssText='padding:9px 0;border-top:1px solid #ddeae5;font-size:14px;display:flex;align-items:flex-start';
+      var left=document.createElement('div');left.style.cssText='flex:1;min-width:0';
+      var d=document.createElement('div');d.textContent=(it.date||'日付不明')+' '+(it.merchant||'店名不明')+' / '+Number(it.total||0).toLocaleString()+'円';d.style.fontWeight='bold';left.append(d);
+      var m=document.createElement('p');m.className='hint';m.style.margin='3px 0 0';m.textContent=(it.account||'科目未定')+'・'+(it.status||'')+(it.dept?'・'+it.dept:'');left.append(m);
+      div.append(left);
+      if(it.id&&(it.status==='要確認'||it.status==='確定')){
+        var btn=document.createElement('button');btn.className='secondary';btn.textContent='科目を修正';btn.style.cssText='flex:none;width:auto;margin-left:10px;padding:5px 12px;font-size:13px;border-radius:8px';
+        btn.addEventListener('click',function(){openEdit_(it);});
+        div.append(btn);
+      }
+      box.append(div);
+    });
+  }).catch(function(e){$('status').textContent='取得失敗：'+e.message;});
+});
+function openEdit_(it){
+  var old=document.getElementById('editModal');if(old)old.remove();
+  var ov=document.createElement('div');ov.id='editModal';ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:50;display:flex;align-items:center;justify-content:center;padding:16px';
+  var card=document.createElement('div');card.style.cssText='background:#fff;border-radius:14px;padding:20px;width:100%;max-width:420px';
+  var h=document.createElement('div');h.textContent='科目の修正';h.style.cssText='font-size:19px;font-weight:bold;margin-bottom:10px';card.append(h);
+  var info=document.createElement('p');info.className='hint';info.style.cssText='margin:0 0 14px;font-size:15px';info.textContent=(it.date||'日付不明')+' '+(it.merchant||'店名不明')+' / '+Number(it.total||0).toLocaleString()+'円（'+(it.status||'')+'）';card.append(info);
+  var lab=document.createElement('label');lab.className='label';lab.textContent='勘定科目';card.append(lab);
+  var sel=mkSelect(ACCTS,it.account);card.append(sel);
+  var msg=document.createElement('p');msg.className='message';card.append(msg);
+  var row=document.createElement('div');row.style.cssText='display:flex;gap:10px;margin-top:16px';
+  var save=document.createElement('button');save.textContent='保存する';save.style.flex='1';
+  save.addEventListener('click',function(){save.disabled=true;api({action:'updateReviewAccount',id:it.id,account:sel.value}).then(function(){ov.remove();$('check').click();}).catch(function(e){save.disabled=false;msg.textContent='保存失敗：'+e.message;});});
+  var cancel=document.createElement('button');cancel.className='secondary';cancel.textContent='キャンセル';cancel.style.flex='1';cancel.addEventListener('click',function(){ov.remove();});
+  row.append(save);row.append(cancel);card.append(row);ov.append(card);
+  ov.addEventListener('click',function(e){if(e.target===ov)ov.remove();});
+  document.body.append(ov);
+}
+$('extraCsv').addEventListener('click',function(){
+  var month=$('month').value;
+  if(!month){$('extraResult').textContent='先に対象の月を選んでください';return;}
+  $('extraCsv').disabled=true;$('extraResult').textContent='追加CSVを作成しています…';
+  api({action:'exportAdditionalCsv',month:month}).then(function(r){
+    $('extraResult').textContent=r.none?r.message:(month+'分の追加CSVを作成しました：'+r.count+'件・'+Number(r.total).toLocaleString()+'円\n'+r.url+'\n事務AI自動化LINEにも通知しました。弥生へ取り込んだら、LINEの「弥生への取込完了」を押してください。');
+  }).catch(function(e){$('extraResult').textContent='作成失敗：'+e.message;});
+  $('extraCsv').disabled=false;
+});
+$('loadReviews').addEventListener('click',function(){
+  $('reviews').textContent='読み込み中…';
+  api({action:'getReviewList',month:$('month').value}).then(function(rows){
+    var box=$('reviews');box.replaceChildren();
+    if(!rows.length){box.textContent='要確認の仕訳はありません';return;}
+    rows.forEach(function(row){
+      var div=document.createElement('div');div.style.cssText='padding:12px 0;border-top:1px solid #ddeae5';
+      var desc=document.createElement('div');desc.textContent=(row.date||'日付不明')+' '+row.merchant+' / '+row.total+'円';desc.style.fontWeight='bold';div.append(desc);
+      var reason=document.createElement('p');reason.textContent='要確認：'+row.reason;reason.className='hint';div.append(reason);
+      var link=document.createElement('a');link.href=row.url;link.target='_blank';link.rel='noopener noreferrer';link.textContent='元のレシートを見る';div.append(link);
+      var drow=document.createElement('div');drow.style.cssText='display:flex;gap:10px;align-items:flex-end;margin:10px 0 2px';
+      var dw=document.createElement('div');dw.style.flex='1';var dl=document.createElement('label');dl.className='label';dl.textContent='購入日';dw.append(dl);
+      var dinp=document.createElement('input');dinp.type='date';dinp.value=row.date||'';dw.append(dinp);drow.append(dw);
+      var dbtn=document.createElement('button');dbtn.className='secondary';dbtn.textContent='日付を保存';dbtn.style.cssText='flex:none;width:auto;padding:10px 14px';
+      dbtn.addEventListener('click',function(){
+        if(!dinp.value){dbtn.textContent='日付を選んでください';return;}
+        dbtn.disabled=true;
+        api({action:'updateReviewDate',id:row.id,date:dinp.value}).then(function(r3){
+          desc.textContent=dinp.value+' '+row.merchant+' / '+row.total+'円';
+          if(r3.remaining&&r3.remaining.length){reason.textContent='要確認：'+r3.remaining.join(' / ');dbtn.textContent='日付を保存しました';dbtn.disabled=false;}
+          else{reason.textContent='';dbtn.textContent='日付を保存し、確定しました';}
+        }).catch(function(e){dbtn.disabled=false;dbtn.textContent='保存失敗：'+e.message;});
+      });
+      drow.append(dbtn);div.append(drow);
+      var select=mkSelect(ACCTS,row.account);select.style.margin='12px 0 8px';div.append(select);
+      var taxIssue=/税率・税込総額・税額の検証未完了|消費税額が計算値と不一致/.test(String(row.reason||''));
+      var rateSel=null,taxInp=null;
+      if(taxIssue){
+        var trow=document.createElement('div');trow.style.cssText='display:flex;gap:10px;align-items:flex-end;margin:4px 0 10px';
+        var lw=document.createElement('div');lw.style.flex='1';var ll=document.createElement('label');ll.className='label';ll.textContent='税率';lw.append(ll);
+        rateSel=document.createElement('select');[10,8,0].forEach(function(rt){var o=document.createElement('option');o.value=rt;o.textContent=rt===0?'対象外（非課税）':rt+'%';o.selected=(row.rateHint==null?10:row.rateHint)===rt;rateSel.append(o);});lw.append(rateSel);trow.append(lw);
+        var tw=document.createElement('div');tw.style.flex='1';var tl=document.createElement('label');tl.className='label';tl.textContent='税額（円）';tw.append(tl);
+        taxInp=document.createElement('input');taxInp.type='number';taxInp.inputMode='numeric';taxInp.value=row.taxNow>0?row.taxNow:Math.round(Number(row.total||0)*Number(rateSel.value)/(100+Number(rateSel.value)));tw.append(taxInp);trow.append(tw);
+        div.append(trow);
+        var th=document.createElement('p');th.className='hint';th.style.margin='0 0 10px';th.textContent='レシートに税額の印字がない場合は、計算値のままで構いません。';div.append(th);
+        rateSel.addEventListener('change',function(){taxInp.value=Math.round(Number(row.total||0)*Number(rateSel.value)/(100+Number(rateSel.value)));});
+      }
+      select.addEventListener('change',function(){if(select.value==='租税公課'&&rateSel){rateSel.value='0';if(taxInp)taxInp.value=0;}});
+      if(/重複候補/.test(String(row.reason||''))){
+        var dwr=document.createElement('div');dwr.style.cssText='background:#fdf6e3;border:1px solid #e3cf8a;border-radius:8px;padding:10px;margin:6px 0 10px';
+        var dt=document.createElement('p');dt.className='hint';dt.style.margin='0 0 8px';dt.textContent='同じ日・同じ店・同じ金額のレシートがもう1枚あります。2枚とも別の購入であれば、下のボタンで残せます。同じレシートの二重登録であれば「このレシートを削除」を使ってください。';dwr.append(dt);
+        if(row.dupDesc){var dp=document.createElement('p');dp.className='hint';dp.style.margin='0 0 6px';dp.textContent='もう1枚：'+row.dupDesc;dwr.append(dp);}
+        if(row.dupUrl){var dl2=document.createElement('a');dl2.href=row.dupUrl;dl2.target='_blank';dl2.rel='noopener noreferrer';dl2.textContent='もう1枚のレシートを見る';dwr.append(dl2);}
+        var db=document.createElement('button');db.textContent='別の購入として残す';db.style.cssText='display:block;margin-top:8px;background:#2e7d32;color:#fff;border:none';
+        db.addEventListener('click',function(){db.disabled=true;api({action:'resolveDuplicate',id:row.id}).then(function(r2){
+          if(r2.remaining&&r2.remaining.length){reason.textContent='要確認：'+r2.remaining.join(' / ');dwr.remove();}
+          else{div.replaceChildren();var ok=document.createElement('p');ok.textContent='確定しました';ok.style.fontWeight='bold';div.append(ok);}
+        }).catch(function(e){db.disabled=false;db.textContent='失敗：'+e.message;});});
+        dwr.append(db);div.append(dwr);
+      }
+      var btn=document.createElement('button');btn.textContent=taxIssue?'科目と税額を保存':'この科目で保存';
+      btn.addEventListener('click',function(){
+        var p=taxIssue?api({action:'updateReviewFull',id:row.id,account:select.value,rate:Number(rateSel.value),tax:Number(taxInp.value)}):api({action:'updateReviewAccount',id:row.id,account:select.value});
+        p.then(function(result){btn.textContent=result.remaining.length?'保存しました（他の確認事項あり）':'確定しました';btn.disabled=true;}).catch(function(e){btn.textContent='保存失敗：'+e.message;});
+      });
+      div.append(btn);
+      var del=document.createElement('button');del.textContent='このレシートを削除';del.style.cssText='margin-left:8px;background:#fff;color:#b3261e;border:1px solid #b3261e';
+      del.addEventListener('click',function(){
+        if(!confirm('このレシートを削除しますか？\n画像も削除され、元に戻せません。'))return;
+        del.disabled=true;
+        api({action:'deleteReceipt',id:row.id}).then(function(){div.remove();}).catch(function(e){del.disabled=false;del.textContent='削除失敗：'+e.message;});
+      });
+      div.append(del);
+      box.append(div);
+    });
+  }).catch(function(e){$('reviews').textContent='取得失敗：'+e.message;});
+});
+</script>
+</body>
+</html>

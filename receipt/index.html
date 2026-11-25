@@ -50,11 +50,15 @@
   </div>
 
   <div id="viewCredit" style="display:none">
-    <p class="lead">クレジットカードのレシートを撮ってください。<br>何枚でもまとめて送れます。</p>
+    <p class="lead">クレジットカードのレシートを撮ってください。<br>続けて何枚も撮ってから、まとめて送れます。</p>
     <div class="card">
-      <label class="shoot" for="fileInput">写真を撮る／選ぶ</label>
+      <div style="background:#10312a;border-radius:12px;overflow:hidden"><video id="cam" autoplay playsinline muted style="width:100%;display:block"></video></div>
+      <button class="shoot" id="shootBtn" style="border:none;margin-top:10px;background:#c2410c">📷 撮影する</button>
+      <p id="camMsg" style="font-size:13px;color:#555;margin:8px 0 0">撮るたびに下へ溜まっていきます。</p>
+      <label class="shoot" for="fileInput" style="background:#e6efec;color:#205c40;margin-top:10px">写真から選ぶ</label>
       <input type="file" id="fileInput" accept="image/*" multiple style="display:none">
       <div id="list"></div>
+      <button class="shoot" id="sendAll" style="border:none;margin-top:12px" disabled>まとめて送る</button>
       <div id="doneMsg" class="ok" style="margin-top:12px"></div>
     </div>
     <button class="back" id="btnBack">← 最初に戻る</button>
@@ -62,7 +66,7 @@
 </main>
 <script>
 var POOL_URL = 'https://script.google.com/macros/s/AKfycbw8RLwpa_2CJOI4E6buFRkAb6NujYq1mJuCfOW1UnAdVOXyj61N80k4ZdyfnmKgiWEy/exec';
-var CASH_URL = 'https://script.google.com/macros/s/AKfycbzHCqEvjUTLM5c8BwpjIDKb1D7xpC9CnQbIYBtBc_sUYuuq5OBNA-sxY9wwkDULA6xf5A/exec';
+var CASH_URL = 'https://tadashimail9-design.github.io/ecran-apps/receipt-cash/';
 
 document.getElementById('btnCredit').onclick = function () {
   document.getElementById('viewChoice').style.display = 'none';
@@ -101,47 +105,101 @@ function api(body) {
     .then(function (j) { if (!j.ok) throw new Error(j.error || 'エラー'); return j; });
 }
 
-var sending = false;
+var tray = [];
+var camStream = null;
+function updateSendBtn() {
+  var n = tray.filter(function (t) { return t.state === 'wait' || t.state === 'fail'; }).length;
+  var b = document.getElementById('sendAll');
+  b.disabled = !n;
+  b.textContent = n ? ('まとめて送る（' + n + '枚）') : 'まとめて送る';
+}
+function addToTray(thumb, b64) {
+  var t = { thumb: thumb, b64: b64, state: 'wait' };
+  tray.push(t);
+  var row = document.createElement('div');
+  row.className = 'item';
+  var im = document.createElement('img'); im.src = thumb; row.appendChild(im);
+  var st = document.createElement('span'); st.textContent = '送信待ち'; row.appendChild(st);
+  var del = document.createElement('button');
+  del.textContent = 'やめる';
+  del.style.cssText = 'margin-left:auto;background:#fff;color:#205c40;border:1px solid #205c40;border-radius:8px;padding:6px 10px';
+  del.onclick = function () { tray = tray.filter(function (x) { return x !== t; }); row.remove(); updateSendBtn(); };
+  row.appendChild(del);
+  t.st = st; t.del = del;
+  document.getElementById('list').appendChild(row);
+  updateSendBtn();
+}
+function startCam() {
+  if (camStream) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    document.getElementById('camMsg').textContent = 'この端末ではカメラが使えません。「写真から選ぶ」を使ってください。';
+    return;
+  }
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }).then(function (s) {
+    camStream = s;
+    document.getElementById('cam').srcObject = s;
+  }).catch(function (e) {
+    document.getElementById('camMsg').textContent = 'カメラを起動できませんでした。「写真から選ぶ」からも送れます。';
+  });
+}
+document.getElementById('btnCredit').addEventListener('click', startCam);
+document.getElementById('shootBtn').onclick = function () {
+  var v = document.getElementById('cam');
+  if (!camStream || !v.videoWidth) {
+    document.getElementById('camMsg').textContent = 'カメラの準備ができていません。少し待ってください。';
+    return;
+  }
+  var max = 1200;
+  var scale = Math.min(1, max / Math.max(v.videoWidth, v.videoHeight));
+  var canvas = document.createElement('canvas');
+  canvas.width = Math.round(v.videoWidth * scale); canvas.height = Math.round(v.videoHeight * scale);
+  canvas.getContext('2d').drawImage(v, 0, 0, canvas.width, canvas.height);
+  var dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+  addToTray(dataUrl, dataUrl.split(',')[1]);
+  document.getElementById('camMsg').textContent = '撮影しました。続けて撮れます。';
+};
 document.getElementById('fileInput').addEventListener('change', function (ev) {
   var files = Array.prototype.slice.call(ev.target.files || []);
   ev.target.value = '';
-  if (!files.length || sending) return;
-  sending = true;
-  var failCount = 0;
-  var doneMsg = document.getElementById('doneMsg');
-  doneMsg.textContent = '';
-  var list = document.getElementById('list');
   var chain = Promise.resolve();
   files.forEach(function (f) {
-    var row = document.createElement('div');
-    row.className = 'item';
-    row.innerHTML = '<span>送信の準備中…</span>';
-    list.appendChild(row);
     chain = chain.then(function () {
-      return compress(f).then(function (c) {
-        row.innerHTML = '';
-        var im = document.createElement('img'); im.src = c.thumb; row.appendChild(im);
-        var st = document.createElement('span'); st.textContent = '送っています…'; row.appendChild(st);
-        return api({ action: 'uploadReceipt', image: c.b64, mime: 'image/jpeg' }).then(function () {
-          st.innerHTML = '<span class="ok">受け付けました</span>';
-        });
+      return compress(f).then(function (c) { addToTray(c.thumb, c.b64); }).catch(function () {});
+    });
+  });
+});
+document.getElementById('sendAll').onclick = function () {
+  var targets = tray.filter(function (t) { return t.state === 'wait' || t.state === 'fail'; });
+  if (!targets.length) return;
+  var btn = document.getElementById('sendAll');
+  btn.disabled = true;
+  var doneMsg = document.getElementById('doneMsg');
+  doneMsg.textContent = '';
+  var failCount = 0;
+  var chain = Promise.resolve();
+  targets.forEach(function (t) {
+    chain = chain.then(function () {
+      t.st.textContent = '送っています…';
+      return api({ action: 'uploadReceipt', image: t.b64, mime: 'image/jpeg' }).then(function () {
+        t.state = 'done';
+        t.st.innerHTML = '<span class="ok">受け付けました</span>';
+        if (t.del) t.del.remove();
       }).catch(function (e) {
+        t.state = 'fail';
         failCount++;
-        var st2 = document.createElement('span');
-        st2.innerHTML = '<span class="err">送れませんでした：' + String(e && e.message || e) + '</span>';
-        row.appendChild(st2);
+        t.st.innerHTML = '<span class="err">送れませんでした：' + String(e && e.message || e) + '</span>';
       });
     });
   });
   chain.then(function () {
-    sending = false;
     if (failCount === 0) {
       doneMsg.textContent = '受け付けました。読み取りは自動で進みます。このまま終わって大丈夫です。';
     } else {
-      doneMsg.innerHTML = '<span class="err">送れなかった写真があります。通信のよい場所でもう一度お試しください。</span>';
+      doneMsg.innerHTML = '<span class="err">送れなかった写真があります。もう一度「まとめて送る」を押してください。</span>';
     }
+    updateSendBtn();
   });
-});
+};
 </script>
 </body>
 </html>
