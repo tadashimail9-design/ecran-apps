@@ -38,6 +38,12 @@
   .st { font-size: 11px; color: #a15c00; }
   .foot { font-size: 12px; color: #999; line-height: 1.7; margin-top: 14px; }
   .logout { background: none; color: #2f5d7d; font-size: 13px; text-decoration: underline; padding: 6px; }
+  .ptabs { display: flex; gap: 8px; margin-bottom: 14px; }
+  .ptab { flex: 1; margin: 0; background: #e8eef2; color: #2f5d7d; font-size: 16px; padding: 11px; }
+  .ptab.sel { background: #2f5d7d; color: #fff; }
+  td.item { text-align: left; }
+  td.val { text-align: right; white-space: nowrap; }
+  tr.sum td { font-weight: 700; background: #f7f3ec; }
 </style>
 </head>
 <body>
@@ -63,12 +69,19 @@
         <button class="logout" id="logoutBtn">ログアウト</button>
       </div>
     </div>
+    <div class="ptabs">
+      <button class="ptab sel" id="tabTimeBtn">タイムカード</button>
+      <button class="ptab" id="tabPayBtn">給与明細</button>
+    </div>
     <div class="card">
       <div class="monthbar">
         <button class="nav" id="prevBtn">◀ 前の月</button>
         <div class="ym" id="ymLabel"></div>
         <button class="nav" id="nextBtn">次の月 ▶</button>
       </div>
+    </div>
+    <div id="paneTime">
+    <div class="card">
       <div class="totals">
         <div class="tot"><div class="k">出勤日数</div><div class="v" id="tDays">-</div></div>
         <div class="tot"><div class="k">実働合計</div><div class="v" id="tWork">-</div></div>
@@ -82,6 +95,15 @@
         <tbody id="rowsBody"></tbody>
       </table>
       <div class="foot">給与計算用は、1日ごとに15分単位で切り捨てた合計です。記録の直しや申告は、今まで通りLINEでお願いします。</div>
+    </div>
+    </div>
+    <div id="panePay" style="display:none">
+    <div class="card">
+      <table>
+        <tbody id="payBody"></tbody>
+      </table>
+      <div class="foot">給与明細は、事務所が弥生給与Nextから取り込んだ内容をそのまま表示しています。内容の問い合わせは事務所までお願いします。</div>
+    </div>
     </div>
   </div>
 </div>
@@ -116,11 +138,35 @@ function showLogin(msg, isErr) {
   el.textContent = msg || '';
   el.className = 'msg' + (isErr ? ' err' : '');
 }
+function switchTab(which) {
+  document.getElementById('paneTime').style.display = which === 'time' ? 'block' : 'none';
+  document.getElementById('panePay').style.display = which === 'pay' ? 'block' : 'none';
+  document.getElementById('tabTimeBtn').className = 'ptab' + (which === 'time' ? ' sel' : '');
+  document.getElementById('tabPayBtn').className = 'ptab' + (which === 'pay' ? ' sel' : '');
+}
+function loadPayslip(ym) {
+  var session = localStorage.getItem(LS_KEY);
+  if (!session) return;
+  document.getElementById('payBody').innerHTML = '<tr><td>読み込み中…</td></tr>';
+  api({ action: 'myPayslip', session: session, ym: ym }).then(function (res) {
+    if (!res.ok) { document.getElementById('payBody').innerHTML = '<tr><td>' + (res.error || '読めませんでした') + '</td></tr>'; return; }
+    if (!res.items) { document.getElementById('payBody').innerHTML = '<tr><td>この月の給与明細はまだ登録されていません</td></tr>'; return; }
+    var html = '';
+    res.items.forEach(function (it) {
+      var sum = /合計|差引|総支給|支給額/.test(it.name) ? ' class="sum"' : '';
+      html += '<tr' + sum + '><td class="item">' + String(it.name).replace(/</g, '&lt;') + '</td><td class="val">' + String(it.value).replace(/</g, '&lt;') + '</td></tr>';
+    });
+    document.getElementById('payBody').innerHTML = html;
+  }).catch(function () {
+    document.getElementById('payBody').innerHTML = '<tr><td>通信に失敗しました</td></tr>';
+  });
+}
 function loadMonth(ym) {
   var session = localStorage.getItem(LS_KEY);
   if (!session) { showLogin(''); return; }
   curYm = ym;
   document.getElementById('ymLabel').textContent = ym.replace('-', '年') + '月';
+  loadPayslip(ym);
   document.getElementById('rowsBody').innerHTML = '<tr><td colspan="5">読み込み中…</td></tr>';
   api({ action: 'myData', session: session, ym: ym }).then(function (res) {
     if (!res.ok) {
@@ -178,6 +224,8 @@ document.getElementById('sendBtn').addEventListener('click', function () {
   });
 });
 document.getElementById('prevBtn').addEventListener('click', function () { loadMonth(ymShift(curYm, -1)); });
+document.getElementById('tabTimeBtn').addEventListener('click', function () { switchTab('time'); });
+document.getElementById('tabPayBtn').addEventListener('click', function () { switchTab('pay'); });
 document.getElementById('nextBtn').addEventListener('click', function () { loadMonth(ymShift(curYm, 1)); });
 document.getElementById('logoutBtn').addEventListener('click', function () {
   localStorage.removeItem(LS_KEY);
