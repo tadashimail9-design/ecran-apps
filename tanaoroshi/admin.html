@@ -48,6 +48,7 @@
         <button id="reloadStatus" style="margin-left:14px;">状態を更新</button>
       </div>
       <div id="statusBox" class="msg">読み込み中…</div>
+      <div id="vendorBox" class="msg"></div>
       <div style="margin-top:8px;">
         <button id="finKan">神辺店を確定する</button>
         <button id="finKin">木之庄店を確定する</button>
@@ -141,6 +142,36 @@ function loadStatus() {
   api({ action: 'getMonthStatus', ym: ymCode() })
     .then(function (r) { box.innerHTML = statLine('神辺店', r.kannabe) + statLine('木之庄店', r.kinoshou); })
     .catch(function (e) { box.innerHTML = '<span class="err">' + esc(e.message) + '</span>'; });
+  var vbox = document.getElementById('vendorBox');
+  api({ action: 'getVendorStatus', ym: ymCode() })
+    .then(function (r) { vbox.innerHTML = vendorTable('神辺店', 'kannabe', r.kannabe) + vendorTable('木之庄店', 'kinoshou', r.kinoshou); })
+    .catch(function (e) { vbox.innerHTML = '<span class="err">' + esc(e.message) + '</span>'; });
+}
+function vendorTable(name, store, list) {
+  var rows = list.map(function (v) {
+    var btn = '';
+    if (v.noStock) btn = '<button class="small sub" onclick="unmarkNoStock(\'' + store + '\', this)" data-v="' + esc(v.vendor) + '">在庫なしを取り消す</button>';
+    else if (v.state !== '完了') btn = '<button class="small sub" onclick="markNoStock(\'' + store + '\', this)" data-v="' + esc(v.vendor) + '">在庫なしにする</button>';
+    return '<tr><td>' + esc(v.vendor) + '</td><td><b>' + esc(v.state) + '</b></td>' +
+      '<td>撮影 ' + v.shot + '/' + v.pages + '・読取 ' + v.read + '</td>' +
+      '<td>' + (v.review + v.drop > 0 ? '確認待ち ' + (v.review + v.drop) + '件' : '') + '</td>' +
+      '<td class="rowbtns">' + btn + '</td></tr>';
+  }).join('');
+  return '<div style="margin-top:12px;"><b style="font-size:16px;">' + name + '　業者ごとの状態</b>' +
+    '<table><thead><tr><th>業者</th><th>状態</th><th>ページ</th><th></th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+function markNoStock(store, btn) {
+  var vendor = btn.getAttribute('data-v');
+  if (!confirm(vendor + ' を「在庫なし」にしますか？（撮影の催促が止まり、月次締めでも完了扱いになります）')) return;
+  api({ action: 'markNoStock', ym: ymCode(), store: store, vendor: vendor, by: '管理画面' })
+    .then(function () { loadStatus(); })
+    .catch(function (e) { alert(e.message); });
+}
+function unmarkNoStock(store, btn) {
+  var vendor = btn.getAttribute('data-v');
+  api({ action: 'unmarkNoStock', ym: ymCode(), store: store, vendor: vendor, by: '管理画面' })
+    .then(function () { loadStatus(); })
+    .catch(function (e) { alert(e.message); });
 }
 document.getElementById('reloadStatus').onclick = loadStatus;
 
