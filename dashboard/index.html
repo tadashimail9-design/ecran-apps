@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>経営ダッシュボード</title>
+<meta name="theme-color" content="#334155">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="経営">
+<style>
+:root{--ink:#1f2937;--mut:#6b7280;--line:#e5e7eb;--card:#fff;--bg:#f4f4f2;--acc:#2f6db3}
+@media (prefers-color-scheme: dark){:root{--ink:#e5e7eb;--mut:#9ca3af;--line:#374151;--card:#1f2937;--bg:#111827;--acc:#6aa5dd}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif}
+.wrap{max-width:560px;margin:0 auto;padding:14px 12px 28px}
+h1{font-size:19px;margin:2px 0 2px}
+.sub{font-size:12px;color:var(--mut);margin-bottom:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:10px}
+.card h2{font-size:12px;color:var(--mut);margin:0 0 8px;font-weight:600}
+.big{font-size:26px;font-weight:800}
+.store{margin-top:12px}
+.store .nm{font-size:15px;font-weight:700}
+.bar{position:relative;height:12px;background:var(--line);border-radius:6px;margin:6px 0 4px}
+.bar .fill{position:absolute;left:0;top:0;bottom:0;background:var(--acc);border-radius:6px}
+.bar .mark{position:absolute;top:-3px;bottom:-3px;width:2.5px;background:var(--ink)}
+.row{display:flex;justify-content:space-between;font-size:12.5px;line-height:1.7}
+.row .r{text-align:right}
+.mut{color:var(--mut)}
+.day{font-size:12.5px;font-weight:700;margin:10px 0 3px}
+.day:first-of-type{margin-top:0}
+.ev{font-size:13.5px;line-height:1.6;padding:2px 0}
+.chip{display:inline-block;min-width:38px;text-align:center;font-size:10px;font-weight:700;padding:1px 4px;border-radius:4px;margin-right:6px;vertical-align:1px}
+.chip.line{background:#e7f5e9;color:#2f9e44}.chip.print{background:#fff4e0;color:#b45309}.chip.other{background:var(--line);color:var(--mut)}
+.links{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.links a{display:block;text-align:center;padding:11px 0;font-size:12.5px;border-radius:9px;background:var(--bg);color:var(--ink);text-decoration:none;border:1px solid var(--line)}
+#msg{font-size:13.5px;line-height:1.8;padding:18px 4px}
+.foot{font-size:11px;color:var(--mut);text-align:center;margin-top:14px}
+button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <button class="reload" id="reloadBtn">更新</button>
+  <h1>経営ダッシュボード</h1>
+  <div class="sub" id="sub">読み込み中…</div>
+  <div id="msg" style="display:none"></div>
+  <div id="main" style="display:none">
+    <div class="card">
+      <h2>今月の着地</h2>
+      <div id="landing"></div>
+    </div>
+    <div class="card">
+      <h2>今日とこれから</h2>
+      <div id="schedule"></div>
+    </div>
+    <div class="card">
+      <h2>資料・アプリ</h2>
+      <div class="links">
+        <a href="https://docs.google.com/spreadsheets/d/1DFYZdPJNucRyFpXWa4INcbeW-omKW671xBES6Sp7lO8/edit" target="_blank" rel="noopener">目標シート</a>
+        <a href="https://docs.google.com/spreadsheets/d/1WfLkdMmnNgFC8p1trLb_uB5BoZv8u-6bnkn1la3ierE/edit" target="_blank" rel="noopener">日報</a>
+        <a href="https://drive.google.com/drive/folders/168wpnzwUlxjjDVv77MtP2LsLbgT9jgOy" target="_blank" rel="noopener">週報PDF</a>
+        <a href="https://tadashimail9-design.github.io/ecran-apps/tanaoroshi/admin.html" target="_blank" rel="noopener">棚卸</a>
+        <a href="https://tadashimail9-design.github.io/ecran-apps/kintai-admin/" target="_blank" rel="noopener">勤怠管理</a>
+        <a href="https://tadashimail9-design.github.io/ecran-apps/shift/" target="_blank" rel="noopener">シフト</a>
+      </div>
+    </div>
+    <div class="foot">数字は日報と目標マスターの確定分です</div>
+  </div>
+</div>
+<script>
+(function(){
+  var API = "https://script.google.com/macros/s/AKfycbwJYdFb3fwXzUbq4TAbcIyW5RnTTdo2mPnR3eQbRyVCkFBKfwfJVfay8K3sW_x9Keo/exec";
+  var qs = new URLSearchParams(location.search);
+  var key = qs.get('k') || localStorage.getItem('ecranDashKey') || '';
+  if (qs.get('k')) { localStorage.setItem('ecranDashKey', key); history.replaceState(null, '', location.pathname); }
+  var yen = function(n){ return '¥' + Math.round(n).toLocaleString('ja-JP'); };
+  var signed = function(n){ return (n < 0 ? '−¥' : '+¥') + Math.abs(Math.round(n)).toLocaleString('ja-JP'); };
+  function showMsg(t){ var m = document.getElementById('msg'); m.style.display = 'block'; m.textContent = t; document.getElementById('sub').textContent = ''; }
+  function storeHtml(s){
+    var h = '<div class="store"><span class="nm">' + s.name + '</span>　<span class="big" style="font-size:21px">' + (s.landingPct === null ? '—' : s.landingPct + '%') + '</span>';
+    h += '<div class="bar"><div class="fill" style="width:' + Math.min(100, s.cumPct || 0) + '%"></div><div class="mark" style="left:' + Math.min(100, s.pacePct || 0) + '%"></div></div>';
+    h += '<div class="row"><span>着地予想 ' + yen(s.landing) + '</span><span class="r">現在 ' + yen(s.cum) + ' ／ 目標 ' + yen(s.target) + '</span></div>';
+    h += '<div class="row mut"><span>ペースに ' + signed(s.paceDiff) + '</span><span class="r">来客 ' + s.customers.toLocaleString('ja-JP') + '人</span></div></div>';
+    return h;
+  }
+  function load(){
+    if (!key) { showMsg('アクセスキーがありません。Drive「システム管理」フォルダの「ダッシュボード_アクセス情報.txt」のリンクから開いてください。'); return; }
+    document.getElementById('sub').textContent = '読み込み中…';
+    fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ token: key, action: 'init' }) })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (!d.ok) { showMsg(d.error || '読み込めませんでした'); return; }
+        var L = d.landing;
+        document.getElementById('sub').textContent = L.ym.replace('-', '年') + '月 ・ ' + L.elapsed + '日確定分まで（全' + L.daysInMonth + '日）';
+        var t = L.total;
+        var h = '<div class="row" style="align-items:baseline"><span style="font-size:14px">両店の着地予想</span><span class="big">' + (t.landingPct === null ? '—' : t.landingPct + '%') + '</span></div>';
+        h += '<div class="row mut"><span>着地 ' + yen(t.landing) + ' ／ 目標 ' + yen(t.target) + '</span><span class="r">残り' + t.remainDays + '日</span></div>';
+        h += storeHtml(L.stores[0]) + storeHtml(L.stores[1]);
+        document.getElementById('landing').innerHTML = h;
+        var days = (d.schedule && d.schedule.days) || [];
+        var today = new Date(); var tk = today.getFullYear() + '-' + ('0' + (today.getMonth() + 1)).slice(-2) + '-' + ('0' + today.getDate()).slice(-2);
+        var tm = new Date(today.getTime() + 86400000); var mk = tm.getFullYear() + '-' + ('0' + (tm.getMonth() + 1)).slice(-2) + '-' + ('0' + tm.getDate()).slice(-2);
+        var wd = ['日', '月', '火', '水', '木', '金', '土'];
+        var sh = '';
+        if (!days.length) sh = '<div class="ev mut">予定はありません</div>';
+        days.forEach(function(day){
+          var dt = new Date(day.date + 'T00:00:00+09:00');
+          var label = day.date === tk ? '今日' : (day.date === mk ? '明日' : (dt.getMonth() + 1) + '/' + dt.getDate() + '（' + wd[dt.getDay()] + '）');
+          sh += '<div class="day">' + label + '</div>';
+          day.events.forEach(function(ev){
+            var chip = '<span class="chip other">予定</span>';
+            var title = ev.title || '';
+            if (title.indexOf('ＬＩＮＥ') === 0 || title.indexOf('LINE') === 0) { chip = '<span class="chip line">LINE</span>'; title = title.replace(/^(ＬＩＮＥ|LINE)\s*/, ''); }
+            else if (title.indexOf('印') === 0) { chip = '<span class="chip print">印刷</span>'; title = title.replace(/^印[刷厚]?\s*/, ''); }
+            sh += '<div class="ev">' + chip + (ev.time ? ev.time + ' ' : '') + title.replace(/</g, '&lt;') + '</div>';
+          });
+        });
+        document.getElementById('schedule').innerHTML = sh;
+        document.getElementById('main').style.display = 'block';
+        document.getElementById('msg').style.display = 'none';
+      })
+      .catch(function(){ showMsg('通信できませんでした。電波の良いところで更新してください。'); });
+  }
+  document.getElementById('reloadBtn').addEventListener('click', load);
+  load();
+})();
+</script>
+</body>
+</html>
