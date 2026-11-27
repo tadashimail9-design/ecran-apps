@@ -59,6 +59,11 @@ button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;bord
       <h2>今月の着地</h2>
       <div id="landing"></div>
     </div>
+    <div class="card" id="hourlyCard" style="display:none">
+      <h2 id="hourlyTitle">時間帯の売上</h2>
+      <div id="hourlyChart"></div>
+      <div class="sline small mut" id="hourlyNote"></div>
+    </div>
     <div class="card">
       <h2>今日とこれから</h2>
       <div id="schedule"></div>
@@ -146,8 +151,34 @@ button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;bord
         }
         document.getElementById('main').style.display = 'block';
         document.getElementById('msg').style.display = 'none';
+        loadHourly();
       })
       .catch(function(){ showMsg('通信できませんでした。電波の良いところで更新してください。'); });
+  }
+  function loadHourly(){
+    if (!key) return;
+    fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ token: key, action: 'hourly' }) })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (!d.ok || !d.hourly || !d.hourly.hours.length) return;
+        var H = d.hourly;
+        var dt = new Date(H.date + 'T00:00:00+09:00');
+        document.getElementById('hourlyTitle').textContent = '時間帯の売上（' + (dt.getMonth() + 1) + '/' + dt.getDate() + '・両店・税込）';
+        var max = 0, peak = null;
+        H.hours.forEach(function(x){ if (x.amount > max) { max = x.amount; peak = x; } });
+        var W = 340, Hh = 120, pb = 16, n = H.hours.length, bw = W / n;
+        var svg = '<svg viewBox="0 0 ' + W + ' ' + Hh + '" style="width:100%;height:auto;display:block">';
+        H.hours.forEach(function(x, i){
+          var bh = max ? x.amount / max * (Hh - pb - 8) : 0;
+          svg += '<rect x="' + (bw * i + bw * 0.2).toFixed(1) + '" y="' + (Hh - pb - bh).toFixed(1) + '" width="' + (bw * 0.6).toFixed(1) + '" height="' + bh.toFixed(1) + '" rx="1.5" fill="var(--acc)" opacity="0.85"/>';
+          svg += '<text x="' + (bw * i + bw / 2).toFixed(1) + '" y="' + (Hh - 3) + '" font-size="8.5" text-anchor="middle" fill="var(--mut)">' + x.h + '</text>';
+        });
+        svg += '</svg>';
+        document.getElementById('hourlyChart').innerHTML = svg;
+        if (peak) document.getElementById('hourlyNote').textContent = 'ピークは' + peak.h + '時台 ' + yen(peak.amount) + '（' + peak.customers + '人）・合計 ' + yen(H.total);
+        document.getElementById('hourlyCard').style.display = 'block';
+      })
+      .catch(function(){});
   }
   document.getElementById('reloadBtn').addEventListener('click', load);
   document.getElementById('keySave').addEventListener('click', function(){
