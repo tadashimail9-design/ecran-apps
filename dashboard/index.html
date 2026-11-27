@@ -232,7 +232,13 @@ button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;bord
       .then(function(d){
         if (!d.ok || !d.team) return;
         var html = d.team.stores.map(function(st){
-          var h = '<div style="margin-bottom:8px"><span class="nm" style="font-size:14px">' + st.name + '</span> <span class="mut" style="font-size:12px">予定 ' + st.plan.length + '名</span>';
+          var mins = 0;
+          st.plan.forEach(function(a){
+            var sp = a.start.split(':'), ep = a.end.split(':');
+            mins += (Number(ep[0]) * 60 + Number(ep[1])) - (Number(sp[0]) * 60 + Number(sp[1]));
+          });
+          var tot = '合計 ' + Math.floor(mins / 60) + '時間' + (mins % 60 ? (mins % 60) + '分' : '');
+          var h = '<div style="margin-bottom:8px"><span class="nm" style="font-size:14px">' + st.name + '</span> <span class="mut" style="font-size:12px">予定 ' + st.plan.length + '名 ・ ' + tot + '</span>';
           if (st.hasPunches > 0) h += ' <span style="font-size:12px">・ 勤務中 ' + st.inNow.length + '名</span>';
           h += '</div>';
           h += st.plan.map(function(a){
