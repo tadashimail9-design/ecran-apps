@@ -1,0 +1,13 @@
+var CACHE = 'kintai-admin-v1';
+var FILES = ['./', './index.html', './icon.png', './icon-192.png', './manifest.json'];
+self.addEventListener('install', function (e) {
+  e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(FILES); }).then(function () { return self.skipWaiting(); }));
+});
+self.addEventListener('activate', function (e) {
+  e.waitUntil(caches.keys().then(function (keys) {
+    return Promise.all(keys.map(function (k) { return k === CACHE ? null : caches.delete(k); }));
+  }).then(function () { return self.clients.claim(); }));
+});
+self.addEventListener('fetch', function (e) {
+  e.respondWith(fetch(e.request).catch(function () { return caches.match(e.request); }));
+});
