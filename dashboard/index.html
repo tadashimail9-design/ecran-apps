@@ -45,6 +45,13 @@ button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;bord
   <h1>経営ダッシュボード</h1>
   <div class="sub" id="sub">読み込み中…</div>
   <div id="msg" style="display:none"></div>
+  <div id="keybox" class="card" style="display:none">
+    <h2>アクセスキーの設定（最初に1回だけ）</h2>
+    <div style="font-size:13px;line-height:1.7;margin-bottom:8px">Drive「システム管理」フォルダの「ダッシュボード_アクセス情報.txt」に書いてあるリンクを、下に貼り付けてください。次からはそのまま開けます。</div>
+    <input id="keyInput" type="text" placeholder="リンクを貼り付け" style="width:100%;padding:11px;font-size:14px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--ink);margin-bottom:8px">
+    <button id="keySave" style="width:100%;padding:12px;font-size:15px;font-weight:700;border:none;border-radius:9px;background:var(--acc);color:#fff">設定する</button>
+    <a href="https://drive.google.com/file/d/1Rxwc4sswtlm1hVa7M4lCNeP9gK9i_uy9/view" target="_blank" rel="noopener" style="display:block;text-align:center;margin-top:10px;font-size:13px;color:var(--acc)">アクセス情報ファイルを開く</a>
+  </div>
   <div id="main" style="display:none">
     <div class="card">
       <h2>今月の着地</h2>
@@ -73,7 +80,7 @@ button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;bord
   var API = "https://script.google.com/macros/s/AKfycbwJYdFb3fwXzUbq4TAbcIyW5RnTTdo2mPnR3eQbRyVCkFBKfwfJVfay8K3sW_x9Keo/exec";
   var qs = new URLSearchParams(location.search);
   var key = qs.get('k') || localStorage.getItem('ecranDashKey') || '';
-  if (qs.get('k')) { localStorage.setItem('ecranDashKey', key); history.replaceState(null, '', location.pathname); }
+  if (qs.get('k')) { try { localStorage.setItem('ecranDashKey', key); } catch (e) {} }
   var yen = function(n){ return '¥' + Math.round(n).toLocaleString('ja-JP'); };
   var signed = function(n){ return (n < 0 ? '−¥' : '+¥') + Math.abs(Math.round(n)).toLocaleString('ja-JP'); };
   function showMsg(t){ var m = document.getElementById('msg'); m.style.display = 'block'; m.textContent = t; document.getElementById('sub').textContent = ''; }
@@ -85,7 +92,7 @@ button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;bord
     return h;
   }
   function load(){
-    if (!key) { showMsg('アクセスキーがありません。Drive「システム管理」フォルダの「ダッシュボード_アクセス情報.txt」のリンクから開いてください。'); return; }
+    if (!key) { document.getElementById('sub').textContent = ''; document.getElementById('keybox').style.display = 'block'; return; }
     document.getElementById('sub').textContent = '読み込み中…';
     fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ token: key, action: 'init' }) })
       .then(function(r){ return r.json(); })
@@ -123,6 +130,15 @@ button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;bord
       .catch(function(){ showMsg('通信できませんでした。電波の良いところで更新してください。'); });
   }
   document.getElementById('reloadBtn').addEventListener('click', load);
+  document.getElementById('keySave').addEventListener('click', function(){
+    var v = document.getElementById('keyInput').value || '';
+    var m = v.match(/[?&]k=([0-9a-f]+)/) || v.match(/^\s*([0-9a-f]{32})\s*$/);
+    if (!m) { alert('リンクの形が違うようです。アクセス情報ファイルのリンクをそのまま貼ってください。'); return; }
+    key = m[1];
+    try { localStorage.setItem('ecranDashKey', key); } catch (e) {}
+    document.getElementById('keybox').style.display = 'none';
+    load();
+  });
   load();
 })();
 </script>
