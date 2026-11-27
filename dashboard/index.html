@@ -65,15 +65,14 @@ button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;bord
     </div>
     <div class="card">
       <h2>資料・アプリ</h2>
-      <div class="links">
-        <a href="https://docs.google.com/spreadsheets/d/1DFYZdPJNucRyFpXWa4INcbeW-omKW671xBES6Sp7lO8/edit" target="_blank" rel="noopener">目標シート</a>
+      <div class="links" id="linkGrid">
         <a href="https://docs.google.com/spreadsheets/d/1WfLkdMmnNgFC8p1trLb_uB5BoZv8u-6bnkn1la3ierE/edit" target="_blank" rel="noopener">日報</a>
         <a href="https://drive.google.com/drive/folders/168wpnzwUlxjjDVv77MtP2LsLbgT9jgOy" target="_blank" rel="noopener">週報PDF</a>
         <a href="https://tadashimail9-design.github.io/ecran-apps/tanaoroshi/admin.html" target="_blank" rel="noopener">棚卸</a>
         <a href="https://tadashimail9-design.github.io/ecran-apps/kintai-admin/" target="_blank" rel="noopener">勤怠管理</a>
         <a href="https://tadashimail9-design.github.io/ecran-apps/shift/" target="_blank" rel="noopener">シフト</a>
       </div>
-      <div id="goalPdfs" style="margin-top:8px"></div>
+
     </div>
     <div class="foot">数字は日報と目標マスターの確定分です</div>
   </div>
@@ -137,10 +136,13 @@ button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;bord
         });
         document.getElementById('schedule').innerHTML = sh;
         var gp = d.goalPdfs || [];
+        var grid = document.getElementById('linkGrid');
         if (gp.length) {
-          document.getElementById('goalPdfs').innerHTML = '<div class="sline small mut">目標シートPDF</div>' + gp.map(function(g){
-            return '<a href="' + g.url + '" target="_blank" rel="noopener" style="display:inline-block;margin:2px 6px 2px 0;padding:7px 12px;font-size:12.5px;border-radius:8px;background:var(--bg);border:1px solid var(--line);color:var(--ink);text-decoration:none">' + g.store + '（' + g.ym.slice(5) + '月）</a>';
-          }).join('');
+          grid.insertAdjacentHTML('afterbegin', gp.map(function(g){
+            return '<a href="' + g.url + '" target="_blank" rel="noopener">目標PDF ' + g.store.replace('店', '') + '（' + parseInt(g.ym.slice(5), 10) + '月）</a>';
+          }).join(''));
+        } else {
+          grid.insertAdjacentHTML('afterbegin', '<a href="https://docs.google.com/spreadsheets/d/1DFYZdPJNucRyFpXWa4INcbeW-omKW671xBES6Sp7lO8/edit" target="_blank" rel="noopener">目標シート</a>');
         }
         document.getElementById('main').style.display = 'block';
         document.getElementById('msg').style.display = 'none';
