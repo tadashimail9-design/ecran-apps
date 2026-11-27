@@ -35,6 +35,8 @@ h1{font-size:19px;margin:2px 0 2px}
 .links{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
 .links a{display:block;text-align:center;padding:11px 0;font-size:12.5px;border-radius:9px;background:var(--bg);color:var(--ink);text-decoration:none;border:1px solid var(--line)}
 #msg{font-size:13.5px;line-height:1.8;padding:18px 4px}
+.sline{font-size:13px;line-height:1.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sline.small{font-size:12.5px}
 .foot{font-size:11px;color:var(--mut);text-align:center;margin-top:14px}
 button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
 </style>
@@ -87,8 +89,9 @@ button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;bord
   function storeHtml(s){
     var h = '<div class="store"><span class="nm">' + s.name + '</span>　<span class="big" style="font-size:21px">' + (s.landingPct === null ? '—' : s.landingPct + '%') + '</span>';
     h += '<div class="bar"><div class="fill" style="width:' + Math.min(100, s.cumPct || 0) + '%"></div><div class="mark" style="left:' + Math.min(100, s.pacePct || 0) + '%"></div></div>';
-    h += '<div class="row"><span>着地予想 ' + yen(s.landing) + (s.yoyPct === null ? '' : '（前年比 ' + s.yoyPct + '%）') + '</span><span class="r">現在 ' + yen(s.cum) + ' ／ 目標 ' + yen(s.target) + '</span></div>';
-    h += '<div class="row mut"><span>ペースに ' + signed(s.paceDiff) + '</span><span class="r">来客 ' + s.customers.toLocaleString('ja-JP') + '人</span></div></div>';
+    h += '<div class="sline">着地予想 <b>' + yen(s.landing) + '</b></div>';
+    h += '<div class="sline small mut">前年比 ' + (s.yoyPct === null ? '—' : s.yoyPct + '%') + ' ・ ペースに ' + signed(s.paceDiff) + '</div>';
+    h += '<div class="sline small mut">現在 ' + yen(s.cum) + ' ／ 目標 ' + yen(s.target) + ' ・ 来客 ' + s.customers.toLocaleString('ja-JP') + '人</div></div>';
     return h;
   }
   function load(){
@@ -102,8 +105,8 @@ button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;bord
         document.getElementById('sub').textContent = L.ym.replace('-', '年') + '月 ・ ' + L.elapsed + '日確定分まで（全' + L.daysInMonth + '日）';
         var t = L.total;
         var h = '<div class="row" style="align-items:baseline"><span style="font-size:14px">両店の着地予想</span><span class="big">' + (t.landingPct === null ? '—' : t.landingPct + '%') + '</span></div>';
-        h += '<div class="row mut"><span>着地 ' + yen(t.landing) + ' ／ 目標 ' + yen(t.target) + '</span><span class="r">残り' + t.remainDays + '日</span></div>';
-        if (t.yoyPct !== null) h += '<div class="row"><span>前年同月 ' + yen(t.prev) + '</span><span class="r" style="font-weight:700">着地の前年比 ' + t.yoyPct + '%</span></div>';
+        h += '<div class="sline small mut">着地 ' + yen(t.landing) + ' ／ 目標 ' + yen(t.target) + ' ・ 残り' + t.remainDays + '日</div>';
+        if (t.yoyPct !== null) h += '<div class="sline">前年同月 ' + yen(t.prev) + ' ・ <b>前年比 ' + t.yoyPct + '%</b></div>';
         h += storeHtml(L.stores[0]) + storeHtml(L.stores[1]);
         document.getElementById('landing').innerHTML = h;
         var days = (d.schedule && d.schedule.days) || [];
@@ -121,6 +124,7 @@ button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;bord
             var title = ev.title || '';
             if (title.indexOf('ＬＩＮＥ') === 0 || title.indexOf('LINE') === 0) { chip = '<span class="chip line">LINE</span>'; title = title.replace(/^(ＬＩＮＥ|LINE)\s*/, ''); }
             else if (title.indexOf('印') === 0) { chip = '<span class="chip print">印刷</span>'; title = title.replace(/^印[刷厚]?\s*/, ''); }
+            else if (title.indexOf('ＦＡＸ') === 0 || title.indexOf('FAX') === 0) { chip = '<span class="chip print">FAX</span>'; title = title.replace(/^(ＦＡＸ|FAX)\s*/, ''); }
             sh += '<div class="ev">' + chip + (ev.time ? ev.time + ' ' : '') + title.replace(/</g, '&lt;') + '</div>';
           });
         });
