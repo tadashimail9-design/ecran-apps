@@ -88,7 +88,7 @@ button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;bord
       <h2>資料・アプリ</h2>
       <div class="links" id="linkGrid">
         <a href="https://docs.google.com/spreadsheets/d/1WfLkdMmnNgFC8p1trLb_uB5BoZv8u-6bnkn1la3ierE/edit" target="_blank" rel="noopener">日報</a>
-        <a href="https://drive.google.com/drive/folders/168wpnzwUlxjjDVv77MtP2LsLbgT9jgOy" target="_blank" rel="noopener">週報PDF</a>
+        <a id="weeklyLink" href="https://drive.google.com/drive/folders/168wpnzwUlxjjDVv77MtP2LsLbgT9jgOy" target="_blank" rel="noopener">週報PDF</a>
         <a href="https://tadashimail9-design.github.io/ecran-apps/tanaoroshi/admin.html" target="_blank" rel="noopener">棚卸</a>
         <a href="https://tadashimail9-design.github.io/ecran-apps/kintai-admin/" target="_blank" rel="noopener">勤怠管理</a>
         <a href="https://tadashimail9-design.github.io/ecran-apps/shift/" target="_blank" rel="noopener">シフト</a>
@@ -187,6 +187,13 @@ button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;bord
           }).join(''));
         } else {
           grid.insertAdjacentHTML('afterbegin', '<a href="https://docs.google.com/spreadsheets/d/1DFYZdPJNucRyFpXWa4INcbeW-omKW671xBES6Sp7lO8/edit" target="_blank" rel="noopener">目標シート</a>');
+        }
+        var wp = d.weeklyPdfs || [];
+        if (wp.length) {
+          var wl = document.getElementById('weeklyLink');
+          wl.outerHTML = wp.map(function(w){
+            return '<a href="' + w.url + '" target="_blank" rel="noopener">週報PDF ' + w.store.replace('店', '') + '</a>';
+          }).join('');
         }
         document.getElementById('main').style.display = 'block';
         document.getElementById('msg').style.display = 'none';
