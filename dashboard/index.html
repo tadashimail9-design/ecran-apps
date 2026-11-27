@@ -19,14 +19,15 @@ h1{font-size:19px;margin:2px 0 2px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:10px}
 .card h2{font-size:12px;color:var(--mut);margin:0 0 8px;font-weight:600}
 .big{font-size:26px;font-weight:800}
-.store{margin-top:12px}
-.store .nm{font-size:15px;font-weight:700}
-.bar{position:relative;height:12px;background:var(--line);border-radius:6px;margin:6px 0 4px}
+.nm{font-size:16px;font-weight:700}
+.bar{position:relative;height:12px;background:var(--line);border-radius:6px;margin:8px 0 6px}
 .bar .fill{position:absolute;left:0;top:0;bottom:0;background:var(--acc);border-radius:6px}
 .bar .mark{position:absolute;top:-3px;bottom:-3px;width:2.5px;background:var(--ink)}
 .row{display:flex;justify-content:space-between;font-size:12.5px;line-height:1.7}
 .row .r{text-align:right}
 .mut{color:var(--mut)}
+.sline{font-size:13px;line-height:1.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sline.small{font-size:12.5px}
 .day{font-size:12.5px;font-weight:700;margin:10px 0 3px}
 .day:first-of-type{margin-top:0}
 .ev{font-size:13.5px;line-height:1.6;padding:2px 0}
@@ -35,10 +36,10 @@ h1{font-size:19px;margin:2px 0 2px}
 .links{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
 .links a{display:block;text-align:center;padding:11px 0;font-size:12.5px;border-radius:9px;background:var(--bg);color:var(--ink);text-decoration:none;border:1px solid var(--line)}
 #msg{font-size:13.5px;line-height:1.8;padding:18px 4px}
-.sline{font-size:13px;line-height:1.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sline.small{font-size:12.5px}
 .foot{font-size:11px;color:var(--mut);text-align:center;margin-top:14px}
 button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.hchart{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
+.hchart .ht{font-size:11.5px;color:var(--mut);margin-bottom:2px}
 </style>
 </head>
 <body>
@@ -56,13 +57,24 @@ button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;bord
   </div>
   <div id="main" style="display:none">
     <div class="card">
-      <h2>今月の着地</h2>
-      <div id="landing"></div>
+      <h2>両店の着地</h2>
+      <div id="totalBlock"></div>
     </div>
-    <div class="card" id="hourlyCard" style="display:none">
-      <h2 id="hourlyTitle">時間帯の売上</h2>
-      <div id="hourlyChart"></div>
-      <div class="sline small mut" id="hourlyNote"></div>
+    <div class="card">
+      <div id="store-kan"></div>
+      <div class="hchart" id="hwrap-kan" style="display:none">
+        <div class="ht" id="htitle-kan"></div>
+        <div id="hchart-kan"></div>
+        <div class="sline small mut" id="hnote-kan"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div id="store-kino"></div>
+      <div class="hchart" id="hwrap-kino" style="display:none">
+        <div class="ht" id="htitle-kino"></div>
+        <div id="hchart-kino"></div>
+        <div class="sline small mut" id="hnote-kino"></div>
+      </div>
     </div>
     <div class="card">
       <h2>今日とこれから</h2>
@@ -77,7 +89,6 @@ button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;bord
         <a href="https://tadashimail9-design.github.io/ecran-apps/kintai-admin/" target="_blank" rel="noopener">勤怠管理</a>
         <a href="https://tadashimail9-design.github.io/ecran-apps/shift/" target="_blank" rel="noopener">シフト</a>
       </div>
-
     </div>
     <div class="foot">数字は日報と目標マスターの確定分です</div>
   </div>
@@ -92,12 +103,26 @@ button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;bord
   var signed = function(n){ return (n < 0 ? '−¥' : '+¥') + Math.abs(Math.round(n)).toLocaleString('ja-JP'); };
   function showMsg(t){ var m = document.getElementById('msg'); m.style.display = 'block'; m.textContent = t; document.getElementById('sub').textContent = ''; }
   function storeHtml(s){
-    var h = '<div class="store"><span class="nm">' + s.name + '</span>　<span class="big" style="font-size:21px">' + (s.landingPct === null ? '—' : s.landingPct + '%') + '</span>';
+    var h = '<span class="nm">' + s.name + '</span>　<span class="big" style="font-size:22px">' + (s.landingPct === null ? '—' : s.landingPct + '%') + '</span>';
     h += '<div class="bar"><div class="fill" style="width:' + Math.min(100, s.cumPct || 0) + '%"></div><div class="mark" style="left:' + Math.min(100, s.pacePct || 0) + '%"></div></div>';
     h += '<div class="sline">着地予想 <b>' + yen(s.landing) + '</b></div>';
     h += '<div class="sline small mut">前年比 ' + (s.yoyPct === null ? '—' : s.yoyPct + '%') + ' ・ ペースに ' + signed(s.paceDiff) + '</div>';
-    h += '<div class="sline small mut">現在 ' + yen(s.cum) + ' ／ 目標 ' + yen(s.target) + ' ・ 来客 ' + s.customers.toLocaleString('ja-JP') + '人</div></div>';
+    h += '<div class="sline small mut">現在 ' + yen(s.cum) + ' ／ 目標 ' + yen(s.target) + ' ・ 来客 ' + s.customers.toLocaleString('ja-JP') + '人</div>';
     return h;
+  }
+  function drawChart(el, hours){
+    var max = 0, peak = null;
+    hours.forEach(function(x){ if (x.amount > max) { max = x.amount; peak = x; } });
+    var W = 340, Hh = 118, pb = 16, n = hours.length, bw = W / n;
+    var svg = '<svg viewBox="0 0 ' + W + ' ' + Hh + '" style="width:100%;height:auto;display:block">';
+    hours.forEach(function(x, i){
+      var bh = max ? x.amount / max * (Hh - pb - 8) : 0;
+      svg += '<rect x="' + (bw * i + bw * 0.2).toFixed(1) + '" y="' + (Hh - pb - bh).toFixed(1) + '" width="' + (bw * 0.6).toFixed(1) + '" height="' + bh.toFixed(1) + '" rx="1.5" fill="var(--acc)" opacity="0.85"/>';
+      svg += '<text x="' + (bw * i + bw / 2).toFixed(1) + '" y="' + (Hh - 3) + '" font-size="8.5" text-anchor="middle" fill="var(--mut)">' + x.h + '</text>';
+    });
+    svg += '</svg>';
+    document.getElementById(el).innerHTML = svg;
+    return peak;
   }
   function load(){
     if (!key) { document.getElementById('sub').textContent = ''; document.getElementById('keybox').style.display = 'block'; return; }
@@ -109,11 +134,12 @@ button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;bord
         var L = d.landing;
         document.getElementById('sub').textContent = L.ym.replace('-', '年') + '月 ・ ' + L.elapsed + '日確定分まで（全' + L.daysInMonth + '日）';
         var t = L.total;
-        var h = '<div class="row" style="align-items:baseline"><span style="font-size:14px">両店の着地予想</span><span class="big">' + (t.landingPct === null ? '—' : t.landingPct + '%') + '</span></div>';
+        var h = '<div class="row" style="align-items:baseline"><span style="font-size:14px">着地予想</span><span class="big">' + (t.landingPct === null ? '—' : t.landingPct + '%') + '</span></div>';
         h += '<div class="sline small mut">着地 ' + yen(t.landing) + ' ／ 目標 ' + yen(t.target) + ' ・ 残り' + t.remainDays + '日</div>';
         if (t.yoyPct !== null) h += '<div class="sline">前年同月 ' + yen(t.prev) + ' ・ <b>前年比 ' + t.yoyPct + '%</b></div>';
-        h += storeHtml(L.stores[0]) + storeHtml(L.stores[1]);
-        document.getElementById('landing').innerHTML = h;
+        document.getElementById('totalBlock').innerHTML = h;
+        document.getElementById('store-kan').innerHTML = storeHtml(L.stores[0]);
+        document.getElementById('store-kino').innerHTML = storeHtml(L.stores[1]);
         var days = (d.schedule && d.schedule.days) || [];
         var today = new Date(); var tk = today.getFullYear() + '-' + ('0' + (today.getMonth() + 1)).slice(-2) + '-' + ('0' + today.getDate()).slice(-2);
         var tm = new Date(today.getTime() + 86400000); var mk = tm.getFullYear() + '-' + ('0' + (tm.getMonth() + 1)).slice(-2) + '-' + ('0' + tm.getDate()).slice(-2);
@@ -160,23 +186,17 @@ button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;bord
     fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ token: key, action: 'hourly' }) })
       .then(function(r){ return r.json(); })
       .then(function(d){
-        if (!d.ok || !d.hourly || !d.hourly.hours.length) return;
+        if (!d.ok || !d.hourly) return;
         var H = d.hourly;
         var dt = new Date(H.date + 'T00:00:00+09:00');
-        document.getElementById('hourlyTitle').textContent = '時間帯の売上（' + (dt.getMonth() + 1) + '/' + dt.getDate() + '・両店・税込）';
-        var max = 0, peak = null;
-        H.hours.forEach(function(x){ if (x.amount > max) { max = x.amount; peak = x; } });
-        var W = 340, Hh = 120, pb = 16, n = H.hours.length, bw = W / n;
-        var svg = '<svg viewBox="0 0 ' + W + ' ' + Hh + '" style="width:100%;height:auto;display:block">';
-        H.hours.forEach(function(x, i){
-          var bh = max ? x.amount / max * (Hh - pb - 8) : 0;
-          svg += '<rect x="' + (bw * i + bw * 0.2).toFixed(1) + '" y="' + (Hh - pb - bh).toFixed(1) + '" width="' + (bw * 0.6).toFixed(1) + '" height="' + bh.toFixed(1) + '" rx="1.5" fill="var(--acc)" opacity="0.85"/>';
-          svg += '<text x="' + (bw * i + bw / 2).toFixed(1) + '" y="' + (Hh - 3) + '" font-size="8.5" text-anchor="middle" fill="var(--mut)">' + x.h + '</text>';
+        [['kan', '神辺店'], ['kino', '木之庄店']].forEach(function(pair){
+          var st = H.stores[pair[0]];
+          if (!st || !st.hours.length) return;
+          document.getElementById('htitle-' + pair[0]).textContent = '時間帯の売上（' + (dt.getMonth() + 1) + '/' + dt.getDate() + '・税込）';
+          var peak = drawChart('hchart-' + pair[0], st.hours);
+          if (peak) document.getElementById('hnote-' + pair[0]).textContent = 'ピークは' + peak.h + '時台 ' + yen(peak.amount) + '（' + peak.customers + '人）・合計 ' + yen(st.total);
+          document.getElementById('hwrap-' + pair[0]).style.display = 'block';
         });
-        svg += '</svg>';
-        document.getElementById('hourlyChart').innerHTML = svg;
-        if (peak) document.getElementById('hourlyNote').textContent = 'ピークは' + peak.h + '時台 ' + yen(peak.amount) + '（' + peak.customers + '人）・合計 ' + yen(H.total);
-        document.getElementById('hourlyCard').style.display = 'block';
       })
       .catch(function(){});
   }
