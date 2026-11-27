@@ -151,8 +151,15 @@ button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;bord
           document.getElementById('anomalies').innerHTML = '<div style="font-size:14px;font-weight:700">いま、目立った異常はありません</div><div class="sline small mut">原価率と残業のチェックは12月から入ります</div>';
         } else {
           document.getElementById('anomCard').style.borderLeft = '4px solid #d97706';
-          document.getElementById('anomalies').innerHTML = anoms.map(function(a){
-            return '<div style="font-size:13.5px;line-height:1.75">' + a.text.replace(/</g, '&lt;') + '</div>';
+          var order = ['神辺店', '木之庄店', '両店'];
+          var grouped = {};
+          anoms.forEach(function(a){ var k = a.store || '両店'; if (!grouped[k]) grouped[k] = []; grouped[k].push(a); });
+          document.getElementById('anomalies').innerHTML = order.filter(function(k){ return grouped[k]; }).map(function(k){
+            var h = '<div style="font-size:12.5px;font-weight:700;margin:6px 0 2px">' + k + '</div>';
+            h += grouped[k].map(function(a){
+              return '<div style="font-size:13.5px;line-height:1.75">・' + a.text.replace(/</g, '&lt;') + '</div>';
+            }).join('');
+            return h;
           }).join('');
         }
         document.getElementById('store-kan').innerHTML = storeHtml(L.stores[0]);
