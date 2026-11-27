@@ -148,7 +148,7 @@ button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;bord
         document.getElementById('totalBlock').innerHTML = h;
         var anoms = d.anomalies || [];
         if (!anoms.length) {
-          document.getElementById('anomalies').innerHTML = '<div style="font-size:14px;font-weight:700">いま、目立った異常はありません</div><div class="sline small mut">原価率・仕入の急増・残業のチェックは12月から入ります</div>';
+          document.getElementById('anomalies').innerHTML = '<div style="font-size:14px;font-weight:700">いま、目立った異常はありません</div><div class="sline small mut">原価率と残業のチェックは12月から入ります</div>';
         } else {
           document.getElementById('anomCard').style.borderLeft = '4px solid #d97706';
           document.getElementById('anomalies').innerHTML = anoms.map(function(a){
