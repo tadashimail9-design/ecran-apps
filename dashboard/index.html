@@ -60,6 +60,10 @@ button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;bord
       <h2>両店の着地</h2>
       <div id="totalBlock"></div>
     </div>
+    <div class="card" id="anomCard">
+      <h2>異常・確認</h2>
+      <div id="anomalies"></div>
+    </div>
     <div class="card">
       <div id="store-kan"></div>
       <div class="hchart" id="hwrap-kan" style="display:none">
@@ -138,6 +142,15 @@ button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;bord
         h += '<div class="sline small mut">着地 ' + yen(t.landing) + ' ／ 目標 ' + yen(t.target) + ' ・ 残り' + t.remainDays + '日</div>';
         if (t.yoyPct !== null) h += '<div class="sline">前年同月 ' + yen(t.prev) + ' ・ <b>前年比 ' + t.yoyPct + '%</b></div>';
         document.getElementById('totalBlock').innerHTML = h;
+        var anoms = d.anomalies || [];
+        if (!anoms.length) {
+          document.getElementById('anomalies').innerHTML = '<div style="font-size:14px;font-weight:700">いま、目立った異常はありません</div><div class="sline small mut">原価率・仕入の急増・残業のチェックは12月から入ります</div>';
+        } else {
+          document.getElementById('anomCard').style.borderLeft = '4px solid #d97706';
+          document.getElementById('anomalies').innerHTML = anoms.map(function(a){
+            return '<div style="font-size:13.5px;line-height:1.75">' + a.text.replace(/</g, '&lt;') + '</div>';
+          }).join('');
+        }
         document.getElementById('store-kan').innerHTML = storeHtml(L.stores[0]);
         document.getElementById('store-kino').innerHTML = storeHtml(L.stores[1]);
         var days = (d.schedule && d.schedule.days) || [];
