@@ -64,6 +64,10 @@ button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;bord
       <h2>異常・確認</h2>
       <div id="anomalies"></div>
     </div>
+    <div class="card" id="teamCard" style="display:none">
+      <h2>今日の体制</h2>
+      <div id="team"></div>
+    </div>
     <div class="card">
       <div id="store-kan"></div>
       <div class="hchart" id="hwrap-kan" style="display:none">
@@ -198,6 +202,7 @@ button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;bord
         document.getElementById('main').style.display = 'block';
         document.getElementById('msg').style.display = 'none';
         loadHourly();
+        loadTeam();
       })
       .catch(function(){ showMsg('通信できませんでした。電波の良いところで更新してください。'); });
   }
@@ -217,6 +222,27 @@ button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;bord
           if (peak) document.getElementById('hnote-' + pair[0]).textContent = 'ピークは' + peak.h + '時台 ' + yen(peak.amount) + '（' + peak.customers + '人）・合計 ' + yen(st.total);
           document.getElementById('hwrap-' + pair[0]).style.display = 'block';
         });
+      })
+      .catch(function(){});
+  }
+  function loadTeam(){
+    if (!key) return;
+    fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ token: key, action: 'team' }) })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (!d.ok || !d.team) return;
+        var html = d.team.stores.map(function(st){
+          var h = '<div style="margin-bottom:8px"><span class="nm" style="font-size:14px">' + st.name + '</span> <span class="mut" style="font-size:12px">予定 ' + st.plan.length + '名</span>';
+          if (st.hasPunches > 0) h += ' <span style="font-size:12px">・ 勤務中 ' + st.inNow.length + '名</span>';
+          h += '</div>';
+          h += st.plan.map(function(a){
+            return '<div class="sline small">' + a.name + ' <span class="mut">' + a.start + '–' + a.end + '</span></div>';
+          }).join('');
+          if (st.hasPunches > 0 && st.inNow.length) h += '<div class="sline small mut">いま勤務中: ' + st.inNow.join('、') + '</div>';
+          return h;
+        }).join('');
+        document.getElementById('team').innerHTML = html;
+        document.getElementById('teamCard').style.display = 'block';
       })
       .catch(function(){});
   }
