@@ -431,8 +431,11 @@ function openDecl(staff, res){
   document.querySelectorAll('#declPanel label, #declPanel .timeRow, #declPanel textarea').forEach(function(el){ el.classList.remove('hidden'); });
   $('declDone').classList.add('hidden');
   $('declPanel').classList.remove('hidden');
+  var declSending = false;
   $('declSend').onclick = function(){
+    if (declSending) return;
     if (!$('declH').value || !$('declM').value) { $('declErr').textContent = '出勤時刻を入力してください'; return; }
+    declSending = true; $('declSend').disabled = true; $('declSkip').disabled = true; $('declErr').textContent = '送信中…';
     apiCall({ action: 'declareStart', token: state.token, staffCode: staff.code, declaredStart: $('declH').value + ':' + $('declM').value, note: $('declNote').value, punchEventId: res.eventId }, function(r){
       if (r && r.ok) {
         $('declDesc').classList.add('hidden');
@@ -442,8 +445,8 @@ function openDecl(staff, res){
         $('declDone').classList.remove('hidden');
         $('declClose').onclick = function(){ $('declPanel').classList.add('hidden'); if (pendingReason) openReason(staff, res); else if (staff && !staff.icon) openIconPicker(staff); };
       }
-      else $('declErr').textContent = (r && r.error) || '申請できませんでした';
-    }, function(){ $('declErr').textContent = '通信エラーで申請できませんでした'; });
+      else { declSending = false; $('declSend').disabled = false; $('declSkip').disabled = false; $('declErr').textContent = (r && r.error) || '申請できませんでした'; }
+    }, function(){ declSending = false; $('declSend').disabled = false; $('declSkip').disabled = false; $('declErr').textContent = '通信エラーで申請できませんでした'; });
   };
   $('declSkip').onclick = function(){ $('declPanel').classList.add('hidden'); if (pendingReason) openReason(staff, res); };
 }
@@ -459,7 +462,10 @@ function openReason(staff, res){
   });
   $('reasonFree').value = ''; $('reasonFree').classList.add('hidden'); $('reasonErr').textContent = '';
   $('reasonPanel').classList.remove('hidden');
+  var reasonSaving = false;
   function save(reason){
+    if (reasonSaving) return;
+    reasonSaving = true; $('reasonSend').disabled = true; $('reasonSkip').disabled = true;
     apiCall({ action: 'saveReason', token: state.token, staffCode: staff.code, kind: rq.kind, minutes: rq.minutes, reason: reason, eventId: res.eventId }, function(r){
       $('reasonPanel').classList.add('hidden');
       if (staff && !staff.icon) openIconPicker(staff);
