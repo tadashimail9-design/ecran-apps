@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>経営ダッシュボード｜週次分析（PC版）</title>
+<style>
+:root{--ink:#1f2937;--mut:#6b7280;--line:#e5e7eb;--card:#fff;--bg:#f4f4f2;--acc:#2f6db3;--bad:#b45309;--badbg:#fef3c7}
+@media (prefers-color-scheme: dark){:root{--ink:#e5e7eb;--mut:#9ca3af;--line:#374151;--card:#1f2937;--bg:#111827;--acc:#6aa5dd;--bad:#fbbf24;--badbg:#453309}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif}
+.wrap{max-width:1240px;margin:0 auto;padding:18px 16px 32px}
+h1{font-size:21px;margin:0 0 2px}
+.sub{font-size:12.5px;color:var(--mut);margin-bottom:12px}
+.controls{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+.controls select,.controls button{font-size:14px;padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.controls a{font-size:13px;color:var(--acc);text-decoration:none}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:900px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:14px}
+.card h2{font-size:16px;margin:0 0 2px}
+.card h3{font-size:13px;color:var(--mut);margin:16px 0 6px;font-weight:700}
+.card h3:first-of-type{margin-top:10px}
+.memo{font-size:12px;color:var(--mut);margin:2px 0 8px}
+.kpi{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;margin:6px 0 2px}
+.kpi b{font-size:17px}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th,td{border-bottom:1px solid var(--line);padding:5px 6px;text-align:right;white-space:nowrap}
+th{color:var(--mut);font-weight:600;font-size:11.5px}
+td:first-child,th:first-child{text-align:left}
+tr.tot td{font-weight:700;border-top:2px solid var(--line)}
+td.bad{background:var(--badbg);color:var(--bad);font-weight:700}
+.neg{color:#dc2626}.pos{color:#2f9e44}
+.foot{font-size:11.5px;color:var(--mut);margin-top:6px;line-height:1.7}
+#msg{font-size:14px;padding:20px 4px}
+@media print{
+  @page{size:A4 landscape;margin:10mm}
+  body{background:#fff}
+  .controls{display:none}
+  .card{border:1px solid #ccc;break-inside:avoid}
+  .wrap{max-width:none;padding:0}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>週次分析（PC版）</h1>
+  <div class="sub" id="sub">読み込み中…</div>
+  <div class="controls">
+    <select id="ymSel"></select>
+    <button id="reloadBtn">更新</button>
+    <button id="printBtn">印刷</button>
+    <a href="./">スマホ版（着地・異常）へ</a>
+  </div>
+  <div id="msg" style="display:none"></div>
+  <div id="main" style="display:none">
+    <div class="grid2" id="storeGrid"></div>
+    <div class="foot">仕入は伝票AIの確定分（税抜）です。取り込みが進むと増えます。コーヒー流通センターは月報側で扱うため、ここには含みません。仕入割合は「月初めからの累計」で見ます（直近1週間だけでは見ません）。最初の週は伝票の取り込みが少なく、割合がぶれやすい時期です。</div>
+  </div>
+</div>
+<script>
+(function(){
+  var API = "https://script.google.com/macros/s/AKfycbwJYdFb3fwXzUbq4TAbcIyW5RnTTdo2mPnR3eQbRyVCkFBKfwfJVfay8K3sW_x9Keo/exec";
+  var qs = new URLSearchParams(location.search);
+  var key = qs.get('k') || localStorage.getItem('ecranDashKey') || '';
+  if (qs.get('k')) { try { localStorage.setItem('ecranDashKey', key); } catch (e) {} }
+  var yen = function(n){ return '¥' + Math.round(n).toLocaleString('ja-JP'); };
+  var num = function(n){ return Math.round(n).toLocaleString('ja-JP'); };
+  var pct1 = function(n){ return (Math.round(n * 10) / 10).toFixed(1) + '%'; };
+  var WD = ['日','月','火','水','木','金','土'];
+
+  var sel = document.getElementById('ymSel');
+  var now = new Date();
+  var months = [];
+  for (var i = -2; i <= 1; i++) {
+    var d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    var ym = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2);
+    months.push(ym);
+  }
+  months.forEach(function(ym){
+    var o = document.createElement('option');
+    o.value = ym; o.textContent = ym.replace('-', '年') + '月';
+    if (ym === now.getFullYear() + '-' + ('0' + (now.getMonth() + 1)).slice(-2)) o.selected = true;
+    sel.appendChild(o);
+  });
+
+  function showMsg(t){ var m = document.getElementById('msg'); m.style.display = 'block'; m.textContent = t; }
+
+  function dailyChart(st, ym, dim) {
+    var W = 560, H = 170, pb = 20, pt = 14;
+    var max = 0;
+    st.daily.forEach(function(r){ if (r.sales !== null && r.sales > max) max = r.sales; if (r.target !== null && r.target > max) max = r.target; });
+    if (!max) return '<div class="memo">日別の売上データがありません</div>';
+    var bw = W / dim;
+    var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;display:block">';
+    st.daily.forEach(function(r, i){
+      var dt = new Date(r.ds + 'T00:00:00+09:00');
+      var wd = dt.getDay();
+      if (r.sales !== null) {
+        var bh = r.sales / max * (H - pb - pt);
+        svg += '<rect x="' + (bw * i + bw * 0.18).toFixed(1) + '" y="' + (H - pb - bh).toFixed(1) + '" width="' + (bw * 0.64).toFixed(1) + '" height="' + bh.toFixed(1) + '" rx="1" fill="var(--acc)" opacity="' + (wd === 0 || wd === 6 ? '1' : '0.75') + '"/>';
+      }
+      var col = wd === 0 ? '#dc2626' : (wd === 6 ? '#2563eb' : 'var(--mut)');
+      svg += '<text x="' + (bw * i + bw / 2).toFixed(1) + '" y="' + (H - 6) + '" font-size="8" text-anchor="middle" fill="' + col + '">' + (i + 1) + '</text>';
+    });
+    var pts = [];
+    st.daily.forEach(function(r, i){ if (r.target !== null) pts.push((bw * i + bw / 2).toFixed(1) + ',' + (H - pb - r.target / max * (H - pb - pt)).toFixed(1)); });
+    if (pts.length > 1) svg += '<polyline points="' + pts.join(' ') + '" fill="none" stroke="#d97706" stroke-width="1.4" stroke-dasharray="4 2"/>';
+    svg += '</svg>';
+    return svg + '<div class="memo">棒＝日別の売上（税抜）。オレンジの破線＝日割目標。土曜は青、日曜は赤の日付。</div>';
+  }
+
+  function storeCard(st, W) {
+    var ym = W.ym, dim = W.daysInMonth;
+    var cumSales = 0, cumCust = 0, elapsed = 0;
+    st.daily.forEach(function(r){ if (r.sales !== null) { cumSales += r.sales; cumCust += r.customers || 0; elapsed++; } });
+    var isCur = ym === (new Date().getFullYear() + '-' + ('0' + (new Date().getMonth() + 1)).slice(-2));
+    var landing = elapsed ? Math.round(cumSales / elapsed * dim) : 0;
+    var h = '<div class="card"><h2>' + st.name + '</h2>';
+    h += '<div class="kpi"><span>月の累計 <b>' + yen(cumSales) + '</b></span>';
+    if (st.target) h += '<span>月間目標 <b>' + yen(st.target) + '</b></span>';
+    if (isCur && st.target) h += '<span>着地 <b>' + Math.round(landing / st.target * 100) + '%</b></span>';
+    if (st.prevYear) h += '<span>前年同月 <b>' + yen(st.prevYear) + '</b></span>';
+    h += '<span>来客 <b>' + num(cumCust) + '人</b></span></div>';
+
+    // 週次サマリ
+    h += '<h3>週ごと</h3><div class="memo">判断：週ごとの売上と客単価の動きを見る。落ちた週は、下の日別グラフで曜日パターンを確かめる。</div>';
+    h += '<table><tr><th>週</th><th>売上</th><th>前月同週比</th><th>客数</th><th>客単価</th><th>日割目標の達成</th></tr>';
+    st.weeks.forEach(function(w){
+      h += '<tr><td>' + w.label + '（' + w.from.slice(5).replace('-', '/') + '〜' + w.to.slice(5).replace('-', '/') + '）</td>';
+      h += '<td>' + (w.sales === null ? '—' : yen(w.sales)) + '</td>';
+      if (w.sales !== null && w.prevSales) {
+        var d = Math.round(w.sales / w.prevSales * 1000) / 10;
+        h += '<td class="' + (d < 100 ? 'neg' : 'pos') + '">' + d.toFixed(1) + '%</td>';
+      } else h += '<td>—</td>';
+      h += '<td>' + (w.customers === null ? '—' : num(w.customers)) + '</td>';
+      h += '<td>' + (w.unit === null ? '—' : yen(w.unit)) + '</td>';
+      h += '<td>' + (w.target ? (Math.round((w.sales || 0) / w.target * 1000) / 10).toFixed(1) + '%' : '—') + '</td></tr>';
+    });
+    h += '<tr class="tot"><td>合計</td><td>' + yen(cumSales) + '</td><td></td><td>' + num(cumCust) + '</td><td>' + (cumCust ? yen(cumSales / cumCust) : '—') + '</td><td></td></tr></table>';
+
+    // 日別グラフ
+    h += '<h3>日別</h3><div class="memo">判断：落ちた日が単発か、同じ曜日に続いているかを見る。</div>';
+    h += dailyChart(st, ym, dim);
+
+    // 業者別・仕入割合（月初めからの累計）
+    var base = W.baseline[st.name] || { vendors: {}, totalShare: null };
+    var vset = {};
+    Object.keys(base.vendors).forEach(function(v){ vset[v] = true; });
+    st.weeks.forEach(function(w){ Object.keys(w.vendors || {}).forEach(function(v){ vset[v] = true; }); });
+    var vlist = Object.keys(vset).sort(function(a, b){
+      var sa = base.vendors[a] ? base.vendors[a].share : -1, sb = base.vendors[b] ? base.vendors[b].share : -1;
+      return sb - sa;
+    });
+    h += '<h3>業者別の仕入割合（月初めからの累計）</h3><div class="memo">判断：帯（過去6か月の平均±幅）を外れた業者は、翌週の発注を絞る・戻す判断に使う。第1週までの列は取り込みが少なくぶれやすいので色を付けていません。</div>';
+    h += '<table><tr><th>業者</th><th>平均</th><th>帯</th>' + st.weeks.map(function(w){ return '<th>' + w.label + 'まで</th>'; }).join('') + '</tr>';
+    function cumRow(label, getAmt, baseShare, band) {
+      var row = '<tr><td>' + label + '</td><td>' + (baseShare === null || baseShare === undefined ? '—' : pct1(baseShare)) + '</td><td>' + (band ? '±' + band + 'pt' : '—') + '</td>';
+      var cs = 0, cp = 0;
+      st.weeks.forEach(function(w, wi){
+        cs += w.sales || 0; cp += getAmt(w);
+        if (!cs) { row += '<td>—</td>'; return; }
+        var share = cp / cs * 100;
+        var bad = wi >= 1 && baseShare !== null && baseShare !== undefined && band && Math.abs(share - baseShare) > band;
+        row += '<td class="' + (bad ? 'bad' : '') + '">' + pct1(share) + '</td>';
+      });
+      return row + '</tr>';
+    }
+    vlist.forEach(function(v){
+      var b = base.vendors[v];
+      h += cumRow(v, function(w){ return (w.vendors && w.vendors[v]) || 0; }, b ? b.share : null, b ? b.band : null);
+    });
+    h += cumRow('仕入全体', function(w){ return w.purch || 0; }, base.totalShare, 3);
+    h += '</table></div>';
+    return h;
+  }
+
+  function load() {
+    if (!key) { showMsg('アクセスキーがありません。スマホ版を先に開いてから、このページを開いてください。'); return; }
+    document.getElementById('sub').textContent = '読み込み中…';
+    document.getElementById('main').style.display = 'none';
+    document.getElementById('msg').style.display = 'none';
+    fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ token: key, action: 'weekly', ym: sel.value }) })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (!d.ok) { showMsg(d.error || '読み込めませんでした'); return; }
+        var W = d.weekly;
+        document.getElementById('sub').textContent = W.ym.replace('-', '年') + '月 ・ 週は暦どおり（第1週＝1〜7日、第4週＝22日〜月末） ・ 基準の平均は ' + ((W.baseline['神辺店'] || {}).months || []).join('〜') + ' の過去6か月';
+        document.getElementById('storeGrid').innerHTML = W.stores.map(function(st){ return storeCard(st, W); }).join('');
+        document.getElementById('main').style.display = 'block';
+      })
+      .catch(function(){ showMsg('通信できませんでした。'); });
+  }
+  document.getElementById('reloadBtn').addEventListener('click', load);
+  sel.addEventListener('change', load);
+  document.getElementById('printBtn').addEventListener('click', function(){ window.print(); });
+  load();
+})();
+</script>
+</body>
+</html>
