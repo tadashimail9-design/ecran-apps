@@ -207,7 +207,7 @@ td.bad{background:var(--badbg);color:var(--bad);font-weight:700}
     SH.stores.forEach(function(bs){
       var st = W.stores.filter(function(x){ return x.name === bs.name; })[0];
       h += '<div class="card"><h2>スタッフの労働時間（' + bs.name + '）</h2>';
-      h += '<div class="memo">判断：人時売上高の材料です。特定の日・特定の人に偏っていないかを見ます。実働時間（ハーモスのタイムカード）です。</div>';
+      h += '<div class="memo">判断：人時売上高の材料です。特定の日・特定の人に偏っていないかを見ます。実労働時間（休憩を引いた時間、ハーモスのタイムカード）です。</div>';
       if (st) {
         var parts = st.weeks.map(function(w){
           var wh = 0;
