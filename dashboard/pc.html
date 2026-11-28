@@ -208,6 +208,7 @@ td.bad{background:var(--badbg);color:var(--bad);font-weight:700}
       var st = W.stores.filter(function(x){ return x.name === bs.name; })[0];
       h += '<div class="card"><h2>スタッフの労働時間（' + bs.name + '）</h2>';
       h += '<div class="memo">判断：人時売上高の材料です。特定の日・特定の人に偏っていないかを見ます。実労働時間（休憩を引いた時間、ハーモスのタイムカード）です。</div>';
+      if (SH.wageAsOf) h += '<div class="memo">給与（概算）：パート＝従業員名簿の時給×実労働時間、正社員＝名簿の月給額の日割り（' + SH.wageElapsed + '／' + SH.wageDim + '日、' + SH.wageAsOf + '時点）。名簿に金額が入っていない人は「—」。割増・手当・交通費は含みません。</div>';
       if (st) {
         var parts = st.weeks.map(function(w){
           var wh = 0;
@@ -218,7 +219,7 @@ td.bad{background:var(--badbg);color:var(--bad);font-weight:700}
       }
       h += '<div style="overflow-x:auto"><table><tr><th>スタッフ</th>';
       (bs.bandLabels || []).forEach(function(lb){ h += '<th>' + lb + '</th>'; });
-      h += '<th>計</th><th>給与</th>';
+      h += '<th>計</th><th>給与（概算）</th>';
       for (var d = 1; d <= dim; d++) {
         var dt = new Date(ym + '-' + ('0' + d).slice(-2) + 'T00:00:00+09:00');
         var wd = dt.getDay();
