@@ -185,6 +185,7 @@ button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;bord
           var dt = new Date(day.date + 'T00:00:00+09:00');
           var label = day.date === tk ? '今日' : (day.date === mk ? '明日' : (dt.getMonth() + 1) + '/' + dt.getDate() + '（' + wd[dt.getDay()] + '）');
           sh += '<div class="day">' + label + '</div>';
+          if (!day.events.length) sh += '<div class="ev mut">予定はありません</div>';
           day.events.forEach(function(ev){
             var chip = '<span class="chip other">予定</span>';
             var title = ev.title || '';
