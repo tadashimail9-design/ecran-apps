@@ -116,6 +116,15 @@ button.reload{float:right;font-size:12px;padding:5px 12px;border-radius:8px;bord
     h += '<div class="sline">着地予想 <b>' + yen(s.landing) + '</b></div>';
     h += '<div class="sline small mut">前年比 ' + (s.yoyPct === null ? '—' : s.yoyPct + '%') + ' ・ ペースに ' + signed(s.paceDiff) + '</div>';
     h += '<div class="sline small mut">現在 ' + yen(s.cum) + ' ／ 目標 ' + yen(s.target) + ' ・ 来客 ' + s.customers.toLocaleString('ja-JP') + '人</div>';
+    if (s.remain > 0 && s.remainDays > 0) {
+      var man = Math.round(s.perDay / 1000) / 10;
+      var manStr = (man % 1 === 0) ? String(Math.round(man)) : man.toFixed(1);
+      h += '<div class="sline">店舗目標まで あと <b>' + yen(s.remain) + '</b>（残り' + s.remainDays + '日、1日約' + manStr + '万円）</div>';
+    } else if (s.remain > 0) {
+      h += '<div class="sline">店舗目標まで あと <b>' + yen(s.remain) + '</b>（本日が最終日）</div>';
+    } else {
+      h += '<div class="sline">店舗目標は達成しています</div>';
+    }
     return h;
   }
   function drawChart(el, hours){
