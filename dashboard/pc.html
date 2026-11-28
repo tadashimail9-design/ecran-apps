@@ -55,6 +55,7 @@ td.bad{background:var(--badbg);color:var(--bad);font-weight:700}
   <div id="msg" style="display:none"></div>
   <div id="main" style="display:none">
     <div class="grid2" id="storeGrid"></div>
+    <div id="staffGrid"></div>
     <div class="foot">仕入は伝票AIの確定分（税抜）です。取り込みが進むと増えます。コーヒー流通センターは月報側で扱うため、ここには含みません。仕入割合は「月初めからの累計」で見ます（直近1週間だけでは見ません）。最初の週は伝票の取り込みが少なく、割合がぶれやすい時期です。</div>
   </div>
 </div>
@@ -125,19 +126,22 @@ td.bad{background:var(--badbg);color:var(--bad);font-weight:700}
 
     // 週次サマリ
     h += '<h3>週ごと</h3><div class="memo">判断：週ごとの売上と客単価の動きを見る。落ちた週は、下の日別グラフで曜日パターンを確かめる。</div>';
-    h += '<table><tr><th>週</th><th>売上</th><th>前月同週比</th><th>客数</th><th>客単価</th><th>日割目標の達成</th></tr>';
+    h += '<table><tr><th>週</th><th>売上</th><th>前年同週比</th><th>客数</th><th>客単価</th><th>日割目標の達成</th><th>原価率（目安）</th></tr>';
     st.weeks.forEach(function(w){
       h += '<tr><td>' + w.label + '（' + w.from.slice(5).replace('-', '/') + '〜' + w.to.slice(5).replace('-', '/') + '）</td>';
       h += '<td>' + (w.sales === null ? '—' : yen(w.sales)) + '</td>';
-      if (w.sales !== null && w.prevSales) {
-        var d = Math.round(w.sales / w.prevSales * 1000) / 10;
+      if (w.sales !== null && w.yoySales) {
+        var d = Math.round(w.sales / w.yoySales * 1000) / 10;
         h += '<td class="' + (d < 100 ? 'neg' : 'pos') + '">' + d.toFixed(1) + '%</td>';
       } else h += '<td>—</td>';
       h += '<td>' + (w.customers === null ? '—' : num(w.customers)) + '</td>';
       h += '<td>' + (w.unit === null ? '—' : yen(w.unit)) + '</td>';
-      h += '<td>' + (w.target ? (Math.round((w.sales || 0) / w.target * 1000) / 10).toFixed(1) + '%' : '—') + '</td></tr>';
+      h += '<td>' + (w.target ? (Math.round((w.sales || 0) / w.target * 1000) / 10).toFixed(1) + '%' : '—') + '</td>';
+      h += '<td>' + (w.sales ? pct1((w.purch || 0) / w.sales * 100) : '—') + '</td></tr>';
     });
-    h += '<tr class="tot"><td>合計</td><td>' + yen(cumSales) + '</td><td></td><td>' + num(cumCust) + '</td><td>' + (cumCust ? yen(cumSales / cumCust) : '—') + '</td><td></td></tr></table>';
+    var totPurch = st.weeks.reduce(function(t, w){ return t + (w.purch || 0); }, 0);
+    h += '<tr class="tot"><td>合計</td><td>' + yen(cumSales) + '</td><td></td><td>' + num(cumCust) + '</td><td>' + (cumCust ? yen(cumSales / cumCust) : '—') + '</td><td></td><td>' + (cumSales ? pct1(totPurch / cumSales * 100) : '—') + '</td></tr></table>';
+    h += '<div class="memo">原価率（目安）は、その週の仕入÷その週の売上です。週の初めは伝票の取り込みが少なく、低めに出ます。月の確定値は棚卸まで含めた月報で見ます。</div>';
 
     // 日別グラフ
     h += '<h3>日別</h3><div class="memo">判断：落ちた日が単発か、同じ曜日に続いているかを見る。</div>';
@@ -171,7 +175,72 @@ td.bad{background:var(--badbg);color:var(--bad);font-weight:700}
       h += cumRow(v, function(w){ return (w.vendors && w.vendors[v]) || 0; }, b ? b.share : null, b ? b.band : null);
     });
     h += cumRow('仕入全体', function(w){ return w.purch || 0; }, base.totalShare, 3);
-    h += '</table></div>';
+    h += '</table>';
+
+    var dm = st.deptMenu;
+    if (dm) {
+      h += '<h3>部門別売上（税抜）</h3><div class="memo">判断：伸ばす部門・見直す部門を決める材料にします。</div>';
+      h += '<table><tr><th>部門</th><th>売上</th><th>構成比</th><th>数量</th></tr>';
+      dm.dept.forEach(function(x){
+        h += '<tr><td>' + x.name.replace(/</g, '&lt;') + '</td><td>' + yen(x.amt) + '</td><td>' + pct1(x.share) + '</td><td>' + num(x.qty) + '</td></tr>';
+      });
+      h += '<tr class="tot"><td>合計</td><td>' + yen(dm.deptTotal) + '</td><td></td><td></td></tr></table>';
+
+      var sm = dm.abcSummary;
+      h += '<h3>メニューABC分析（税抜・上位40品）</h3><div class="memo">判断：A（累積70%まで）は欠品と品質を守る、B（90%まで）は売り方を工夫、Cは見直し候補にします。全' + dm.abcAll + '品のうち A ' + sm.A.count + '品（売上の' + pct1(sm.A.share) + '）・B ' + sm.B.count + '品（' + pct1(sm.B.share) + '）・C ' + sm.C.count + '品（' + pct1(sm.C.share) + '）です。</div>';
+      h += '<table><tr><th>区分</th><th>商品</th><th>数量</th><th>売上</th><th>構成比</th><th>累積</th></tr>';
+      dm.abc.forEach(function(x){
+        var cls = x.cls === 'A' ? ' style="font-weight:700"' : '';
+        h += '<tr><td>' + x.cls + '</td><td' + cls + '>' + x.name.replace(/</g, '&lt;') + '</td><td>' + num(x.qty) + '</td><td>' + yen(x.amt) + '</td><td>' + pct1(x.share) + '</td><td>' + pct1(x.cum) + '</td></tr>';
+      });
+      h += '</table>';
+    }
+    h += '</div>';
+    return h;
+  }
+
+  function staffSection(W) {
+    var SH = W.staffHours;
+    if (!SH) return '';
+    var dim = W.daysInMonth, ym = W.ym;
+    var h = '';
+    SH.stores.forEach(function(bs){
+      var st = W.stores.filter(function(x){ return x.name === bs.name; })[0];
+      h += '<div class="card"><h2>スタッフの労働時間（' + bs.name + '）</h2>';
+      h += '<div class="memo">判断：人時売上高の材料です。特定の日・特定の人に偏っていないかを見ます。実働時間（ハーモスのタイムカード）です。</div>';
+      if (st) {
+        var parts = st.weeks.map(function(w){
+          var wh = 0;
+          Object.keys(bs.dayTotals).forEach(function(ds){ if (ds >= w.from && ds <= w.to) wh += bs.dayTotals[ds]; });
+          return w.label + ' ' + (wh && w.sales ? yen(w.sales / wh) + '/時' : '—');
+        });
+        h += '<div class="kpi"><span>人時売上高</span><span>' + parts.join('　・　') + '</span><span>月合計 <b>' + (Math.round(bs.total * 10) / 10) + '時間</b></span></div>';
+      }
+      h += '<div style="overflow-x:auto"><table><tr><th>スタッフ</th>';
+      for (var d = 1; d <= dim; d++) {
+        var dt = new Date(ym + '-' + ('0' + d).slice(-2) + 'T00:00:00+09:00');
+        var wd = dt.getDay();
+        var col = wd === 0 ? ' style="color:#dc2626"' : (wd === 6 ? ' style="color:#2563eb"' : '');
+        h += '<th' + col + '>' + d + '</th>';
+      }
+      h += '<th>合計</th></tr>';
+      bs.staff.forEach(function(p){
+        h += '<tr><td>' + p.name.replace(/</g, '&lt;') + '</td>';
+        for (var d2 = 1; d2 <= dim; d2++) {
+          var ds = ym + '-' + ('0' + d2).slice(-2);
+          var v = p.days[ds];
+          h += '<td>' + (v ? (Math.round(v * 10) / 10) : '·') + '</td>';
+        }
+        h += '<td><b>' + (Math.round(p.total * 10) / 10) + '</b></td></tr>';
+      });
+      h += '<tr class="tot"><td>日合計</td>';
+      for (var d3 = 1; d3 <= dim; d3++) {
+        var ds3 = ym + '-' + ('0' + d3).slice(-2);
+        var tv = bs.dayTotals[ds3];
+        h += '<td>' + (tv ? (Math.round(tv * 10) / 10) : '·') + '</td>';
+      }
+      h += '<td>' + (Math.round(bs.total * 10) / 10) + '</td></tr></table></div></div>';
+    });
     return h;
   }
 
@@ -187,6 +256,7 @@ td.bad{background:var(--badbg);color:var(--bad);font-weight:700}
         var W = d.weekly;
         document.getElementById('sub').textContent = W.ym.replace('-', '年') + '月 ・ 週は暦どおり（第1週＝1〜7日、第4週＝22日〜月末） ・ 基準の平均は ' + ((W.baseline['神辺店'] || {}).months || []).join('〜') + ' の過去6か月';
         document.getElementById('storeGrid').innerHTML = W.stores.map(function(st){ return storeCard(st, W); }).join('');
+        document.getElementById('staffGrid').innerHTML = staffSection(W);
         document.getElementById('main').style.display = 'block';
       })
       .catch(function(){ showMsg('通信できませんでした。'); });
