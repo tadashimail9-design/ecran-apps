@@ -179,7 +179,7 @@ td.bad{background:var(--badbg);color:var(--bad);font-weight:700}
 
     var dm = st.deptMenu;
     if (dm) {
-      h += '<h3>部門別売上（税抜）</h3><div class="memo">判断：伸ばす部門・見直す部門を決める材料にします。</div>';
+      h += '<h3>部門別売上（税抜）</h3><div class="memo">判断：伸ばす部門・見直す部門を決める材料にします。レジの商品データからの集計で、上の売上表と集計日が1日ずれることがあります。</div>';
       h += '<table><tr><th>部門</th><th>売上</th><th>構成比</th><th>数量</th></tr>';
       dm.dept.forEach(function(x){
         h += '<tr><td>' + x.name.replace(/</g, '&lt;') + '</td><td>' + yen(x.amt) + '</td><td>' + pct1(x.share) + '</td><td>' + num(x.qty) + '</td></tr>';
