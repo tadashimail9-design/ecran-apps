@@ -217,6 +217,8 @@ td.bad{background:var(--badbg);color:var(--bad);font-weight:700}
         h += '<div class="kpi"><span>人時売上高</span><span>' + parts.join('　・　') + '</span><span>月合計 <b>' + (Math.round(bs.total * 10) / 10) + '時間</b></span></div>';
       }
       h += '<div style="overflow-x:auto"><table><tr><th>スタッフ</th>';
+      (bs.bandLabels || []).forEach(function(lb){ h += '<th>' + lb + '</th>'; });
+      h += '<th>計</th><th>給与</th>';
       for (var d = 1; d <= dim; d++) {
         var dt = new Date(ym + '-' + ('0' + d).slice(-2) + 'T00:00:00+09:00');
         var wd = dt.getDay();
@@ -226,6 +228,8 @@ td.bad{background:var(--badbg);color:var(--bad);font-weight:700}
       h += '<th>合計</th></tr>';
       bs.staff.forEach(function(p){
         h += '<tr><td>' + p.name.replace(/</g, '&lt;') + '</td>';
+        (p.bands || [0, 0, 0]).forEach(function(bv){ h += '<td>' + (bv ? (Math.round(bv * 10) / 10) : '·') + '</td>'; });
+        h += '<td><b>' + (Math.round(p.total * 10) / 10) + '</b></td><td>' + (p.pay ? yen(p.pay) : '—') + '</td>';
         for (var d2 = 1; d2 <= dim; d2++) {
           var ds = ym + '-' + ('0' + d2).slice(-2);
           var v = p.days[ds];
@@ -234,6 +238,8 @@ td.bad{background:var(--badbg);color:var(--bad);font-weight:700}
         h += '<td><b>' + (Math.round(p.total * 10) / 10) + '</b></td></tr>';
       });
       h += '<tr class="tot"><td>日合計</td>';
+      (bs.bandTotals || [0, 0, 0]).forEach(function(bv){ h += '<td>' + (Math.round(bv * 10) / 10) + '</td>'; });
+      h += '<td>' + (Math.round(bs.total * 10) / 10) + '</td><td>' + (bs.payTotal ? yen(bs.payTotal) : '—') + '</td>';
       for (var d3 = 1; d3 <= dim; d3++) {
         var ds3 = ym + '-' + ('0' + d3).slice(-2);
         var tv = bs.dayTotals[ds3];
